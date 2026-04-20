@@ -7,32 +7,35 @@ from email.message import EmailMessage
 from pathlib import Path
 
 
-RECIPIENT_EMAIL = "fricachai@gmail.com"
+DEFAULT_RECIPIENTS = [
+    "fricachai@gmail.com",
+    "frica@mail.ctbctech.edu.tw",
+]
 BUY_REMINDER_LOOKBACK = 10
 TRACKED_ETFS = {
     "0050": {
-        "name": "元大台灣50",
+        "name": "Yuanta Taiwan 50",
         "path": Path("data/0050.json"),
         "min_drop": 5.0,
         "max_drop": 7.0,
         "add_on_drop": 7.0,
     },
     "0056": {
-        "name": "元大高股息",
+        "name": "Yuanta High Dividend",
         "path": Path("data/0056.json"),
         "min_drop": 6.0,
         "max_drop": 8.0,
         "add_on_drop": 8.0,
     },
     "00878": {
-        "name": "國泰永續高股息",
+        "name": "Cathay Sustainable High Dividend",
         "path": Path("data/00878.json"),
         "min_drop": 5.0,
         "max_drop": 5.0,
         "add_on_drop": 5.0,
     },
     "006208": {
-        "name": "富邦台50",
+        "name": "Fubon Taiwan 50",
         "path": Path("data/006208.json"),
         "min_drop": 5.0,
         "max_drop": 7.0,
@@ -41,16 +44,25 @@ TRACKED_ETFS = {
 }
 
 
+def get_recipient_emails() -> list[str]:
+    raw = os.environ.get("ALERT_TO_EMAILS", "").strip()
+    if raw:
+        recipients = [item.strip() for item in raw.split(",") if item.strip()]
+        if recipients:
+            return recipients
+    return DEFAULT_RECIPIENTS
+
+
 def load_candles(path: Path) -> list[dict]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
 def format_rule_text(min_drop: float, max_drop: float, add_on_drop: float) -> str:
     if min_drop == max_drop:
-        return f"10個交易日收盤價跌幅 -{min_drop:.0f}% ( -{add_on_drop:.0f}% 時加碼 報酬率最高)"
+        return f"10-day close drop -{min_drop:.0f}% (add on at -{add_on_drop:.0f}%)"
     return (
-        f"10個交易日收盤價跌幅 -{min_drop:.0f}% ~ -{max_drop:.0f}% "
-        f"( -{add_on_drop:.0f}% 時加碼 報酬率最高)"
+        f"10-day close drop -{min_drop:.0f}% ~ -{max_drop:.0f}% "
+        f"(add on at -{add_on_drop:.0f}%)"
     )
 
 
@@ -105,10 +117,10 @@ def build_alert_lines() -> list[str]:
         rule_text = format_rule_text(config["min_drop"], config["max_drop"], config["add_on_drop"])
         lines.append(
             (
-                f"{code} {config['name']} | 日期 {latest_candle['date'][:10]} | "
-                f"買點成立 | 目前跌幅 {drop_pct:.2f}% | "
-                f"基準收盤 {drawdown['base_close']:.2f} ({base_candle['date'][:10]}) | "
-                f"當日收盤 {drawdown['current_close']:.2f} | {rule_text}"
+                f"{code} {config['name']} | date {latest_candle['date'][:10]} | "
+                f"signal triggered | current drop {drop_pct:.2f}% | "
+                f"base close {drawdown['base_close']:.2f} ({base_candle['date'][:10]}) | "
+                f"latest close {drawdown['current_close']:.2f} | {rule_text}"
             )
         )
 
@@ -127,14 +139,15 @@ def send_email(lines: list[str]) -> None:
             "Missing SMTP configuration. Set SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, ALERT_FROM_EMAIL."
         )
 
+    recipients = get_recipient_emails()
     message = EmailMessage()
-    message["Subject"] = "4檔ETF買點提醒"
+    message["Subject"] = "4 ETF buy point alert"
     message["From"] = sender
-    message["To"] = RECIPIENT_EMAIL
+    message["To"] = ", ".join(recipients)
     message.set_content(
-        "下列 ETF 在最新交易日出現買點提醒：\n\n"
+        "The following ETFs triggered buy point alerts on the latest trading day:\n\n"
         + "\n".join(f"- {line}" for line in lines)
-        + "\n\n此信件由 GitHub Actions 自動發送。"
+        + "\n\nThis email was sent automatically by GitHub Actions."
     )
 
     with smtplib.SMTP(host, port, timeout=30) as server:

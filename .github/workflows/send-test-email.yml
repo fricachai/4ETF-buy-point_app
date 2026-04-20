@@ -24,4 +24,5 @@ jobs:
           SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           ALERT_FROM_EMAIL: ${{ secrets.ALERT_FROM_EMAIL }}
+          ALERT_TO_EMAILS: ${{ secrets.ALERT_TO_EMAILS }}
         run: python .github/scripts/send_test_email.py

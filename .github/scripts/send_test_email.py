@@ -6,7 +6,19 @@ from datetime import datetime
 from email.message import EmailMessage
 
 
-RECIPIENT_EMAIL = "fricachai@gmail.com"
+DEFAULT_RECIPIENTS = [
+    "fricachai@gmail.com",
+    "frica@mail.ctbctech.edu.tw",
+]
+
+
+def get_recipient_emails() -> list[str]:
+    raw = os.environ.get("ALERT_TO_EMAILS", "").strip()
+    if raw:
+        recipients = [item.strip() for item in raw.split(",") if item.strip()]
+        if recipients:
+            return recipients
+    return DEFAULT_RECIPIENTS
 
 
 def main() -> None:
@@ -21,17 +33,19 @@ def main() -> None:
             "Missing SMTP configuration. Set SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, ALERT_FROM_EMAIL."
         )
 
+    recipients = get_recipient_emails()
     now_text = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+
     message = EmailMessage()
-    message["Subject"] = "4檔ETF測試信"
+    message["Subject"] = "4 ETF test email"
     message["From"] = sender
-    message["To"] = RECIPIENT_EMAIL
+    message["To"] = ", ".join(recipients)
     message.set_content(
-        "這是一封測試信。\n\n"
-        f"收件人：{RECIPIENT_EMAIL}\n"
-        f"寄件人：{sender}\n"
-        f"發送時間：{now_text}\n\n"
-        "如果你收到這封信，代表 GitHub Actions 的 SMTP 設定可正常寄送。"
+        "This is a test email from the 4 ETF buy point monitor.\n\n"
+        f"Recipients: {', '.join(recipients)}\n"
+        f"Sender: {sender}\n"
+        f"Timestamp: {now_text}\n\n"
+        "If you received this email, GitHub Actions SMTP delivery is working."
     )
 
     with smtplib.SMTP(host, port, timeout=30) as server:
@@ -39,7 +53,7 @@ def main() -> None:
         server.login(username, password)
         server.send_message(message)
 
-    print(f"Test email sent to {RECIPIENT_EMAIL}")
+    print(f"Test email sent to {', '.join(recipients)}")
 
 
 if __name__ == "__main__":
