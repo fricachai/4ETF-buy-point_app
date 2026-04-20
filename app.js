@@ -601,12 +601,12 @@ function renderChart(stock) {
   const changeValue = lastCandle.close - prevClose;
   const changePct = prevClose === 0 ? 0 : ((lastCandle.close / prevClose) - 1) * 100;
 
-  const priceArea = { x: 42, y: 72, w: 1120, h: 350 };
-  const xAxisArea = { x: 42, y: 430, w: 1120, h: 38 };
+  const priceArea = { x: 42, y: 72, w: 1120, h: 340 };
+  const xAxisArea = { x: 42, y: 428, w: 1120, h: 38 };
   const priceScaleArea = { x: 1162, y: 72, w: 78, h: 350 };
-  const volumeArea = { x: 42, y: 500, w: 1198, h: 100 };
-  const macdArea = { x: 42, y: 630, w: 1198, h: 110 };
-  const kdjArea = { x: 42, y: 770, w: 1198, h: 100 };
+  const kdjArea = { x: 42, y: 498, w: 1198, h: 96 };
+  const macdArea = { x: 42, y: 634, w: 1198, h: 106 };
+  const volumeArea = { x: 42, y: 780, w: 1198, h: 102 };
   state.chartLayout = { priceArea, xAxisArea, priceScaleArea, volumeArea, macdArea, kdjArea };
 
   drawRoundRect(
