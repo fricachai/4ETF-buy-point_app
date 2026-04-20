@@ -20,7 +20,7 @@ const BUY_REMINDER_LOOKBACK = 10;
 const BUY_REMINDER_RULES = {
   "0050": { min: 5, max: 7, addOn: 7 },
   "0056": { min: 6, max: 8, addOn: 8 },
-  "00878": { min: 4.5, max: 5.5, addOn: 5.5 },
+  "00878": { min: 4.5, max: 5.5, addOn: 5 },
   "006208": { min: 5, max: 7, addOn: 7 },
 };
 

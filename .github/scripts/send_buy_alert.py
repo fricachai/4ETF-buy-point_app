@@ -32,7 +32,7 @@ TRACKED_ETFS = {
         "path": Path("data/00878.json"),
         "min_drop": 4.5,
         "max_drop": 5.5,
-        "add_on_drop": 5.5,
+        "add_on_drop": 5.0,
     },
     "006208": {
         "name": "Fubon Taiwan 50",
