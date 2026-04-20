@@ -848,12 +848,17 @@ function renderChart(stock) {
 
   if (state.chartView.hoverX != null) {
     const lineX = clamp(state.chartView.hoverX, priceArea.x, priceArea.x + priceArea.w);
+    const crosshairBottom = Math.max(
+      kdjArea.y + kdjArea.h,
+      macdArea.y + macdArea.h,
+      volumeArea.y + volumeArea.h,
+    );
     ctx.save();
     ctx.strokeStyle = "rgba(255,255,255,0.82)";
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(lineX, priceArea.y);
-    ctx.lineTo(lineX, kdjArea.y + kdjArea.h);
+    ctx.lineTo(lineX, crosshairBottom);
     ctx.stroke();
     ctx.restore();
   }
