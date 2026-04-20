@@ -3,7 +3,8 @@ name: Buy Signal Alert
 on:
   workflow_dispatch:
   schedule:
-    - cron: "35 9 * * 1-5"
+    # UTC 06:35 = Asia/Taipei 14:35, weekdays after Taiwan market close
+    - cron: "35 6 * * 1-5"
 
 jobs:
   send-alert:
