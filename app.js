@@ -326,7 +326,7 @@ function detectDrawdownBuySignals(candles) {
       signals.push({
         index: i,
         type: "drop-buy",
-        label: `買點: 10日收跌 ${round(drawdown.dropPct, 2)}%`,
+        label: `${formatMonthDay(candles[i].date)} ${round(drawdown.dropPct, 2)}%`,
         dropPct: drawdown.dropPct,
       });
     }
@@ -437,6 +437,12 @@ function formatDate(dateStr) {
   const d = new Date(dateStr);
   if (Number.isNaN(d.getTime())) return dateStr;
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function formatMonthDay(dateStr) {
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return dateStr;
+  return `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function formatDayOnly(dateStr) {
