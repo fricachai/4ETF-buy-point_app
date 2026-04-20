@@ -705,6 +705,7 @@ function renderChart(stock) {
   const minPrice = baseMinPrice + verticalPriceShift;
   const maxPrice = baseMaxPrice + verticalPriceShift;
   const mapPriceY = (price) => priceArea.y + ((maxPrice - price) / (maxPrice - minPrice || 1)) * priceArea.h;
+  state.chartLayout.interaction.closeYByIndex = visible.map((candle) => Math.max(priceArea.y + 16, mapPriceY(candle.close) - 12));
 
   for (let i = 0; i <= 6; i += 1) {
     const y = priceArea.y + (priceArea.h / 6) * i;
@@ -1295,6 +1296,10 @@ function updateHoverCrosshair(point) {
   const hoverIndex = clamp(rawIndex, 0, interaction.visibleLength - 1);
   state.chartView.hoverIndex = hoverIndex;
   state.chartView.hoverX = interaction.plotLeft + hoverIndex * interaction.candleWidth + interaction.candleWidth / 2 + interaction.panX;
+  if (state.chartView.hoverZone === "priceArea" && interaction.closeYByIndex?.[hoverIndex] != null) {
+    state.chartView.hoverY = interaction.closeYByIndex[hoverIndex];
+    return;
+  }
   state.chartView.hoverY = activeArea ? clamp(point.y, activeArea.y, activeArea.y + activeArea.h) : null;
 }
 
