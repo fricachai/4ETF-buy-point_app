@@ -14,6 +14,9 @@ TAIEX_OUTPUT_PATH = Path("data/taiex.json")
 TWSE_STOCK_DAY_URL = "https://www.twse.com.tw/exchangeReport/STOCK_DAY?response=json&date={date_key}&stockNo={stock_code}"
 STOCK_OUTPUT_PATHS = {
     "0050": Path("data/0050.json"),
+    "0056": Path("data/0056.json"),
+    "00878": Path("data/00878.json"),
+    "006208": Path("data/006208.json"),
     "2330": Path("data/2330.json"),
 }
 
