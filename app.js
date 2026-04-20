@@ -288,29 +288,18 @@ function getRecentSeriesMin(series, endIndex, lookback, fallback = null) {
 
 function calculateDrawdownWindow(candles, endIndex, lookback = BUY_REMINDER_LOOKBACK) {
   if (!candles.length || endIndex < 0 || endIndex >= candles.length) return null;
-  const startIndex = Math.max(0, endIndex - lookback + 1);
-  let peakClose = Number.NEGATIVE_INFINITY;
-  let peakIndex = startIndex;
-
-  for (let i = startIndex; i <= endIndex; i += 1) {
-    const close = candles[i]?.close;
-    if (!Number.isFinite(close)) continue;
-    if (close > peakClose) {
-      peakClose = close;
-      peakIndex = i;
-    }
-  }
-
-  if (!Number.isFinite(peakClose) || peakClose <= 0) return null;
+  const startIndex = endIndex - lookback + 1;
+  if (startIndex < 0) return null;
+  const baseClose = candles[startIndex]?.close;
   const currentClose = candles[endIndex]?.close;
-  if (!Number.isFinite(currentClose)) return null;
+  if (!Number.isFinite(baseClose) || baseClose <= 0 || !Number.isFinite(currentClose)) return null;
 
-  const dropPct = ((peakClose - currentClose) / peakClose) * 100;
+  const dropPct = ((baseClose - currentClose) / baseClose) * 100;
   return {
     startIndex,
     endIndex,
-    peakIndex,
-    peakClose,
+    baseIndex: startIndex,
+    baseClose,
     currentClose,
     dropPct,
     inRange: dropPct >= BUY_REMINDER_MIN_DROP && dropPct <= BUY_REMINDER_MAX_DROP,
@@ -329,7 +318,7 @@ function detectDrawdownBuySignals(candles) {
       signals.push({
         index: i,
         type: "drop-buy",
-        label: `買點: 10日跌 ${round(drawdown.dropPct, 2)}%`,
+        label: `買點: 10日收跌 ${round(drawdown.dropPct, 2)}%`,
         dropPct: drawdown.dropPct,
       });
     }
@@ -596,7 +585,7 @@ function renderChart(stock) {
   drawText(`${stock.code}`, 360, 42, "#f7c843", 20);
   drawText(`${round(changeValue, 2)} (${round(changePct, 2)}%)`, 460, 42, changeValue >= 0 ? "#15d18d" : "#ff5263", 18);
   if (buySignalData.latestSignal?.inRange) {
-    drawText(`買點提醒: 10日跌幅 ${round(buySignalData.latestSignal.dropPct, 2)}%`, 660, 42, "#ffb347", 16);
+    drawText(`買點提醒: 10日收盤跌幅 ${round(buySignalData.latestSignal.dropPct, 2)}%`, 660, 42, "#ffb347", 16);
   }
 
   drawRoundRect(volumeArea.x, volumeArea.y - 6, volumeArea.w, volumeArea.h + 12, 10, "rgba(255,255,255,0.015)", null);
@@ -704,7 +693,7 @@ function renderChart(stock) {
   drawText("SMA5", priceArea.x + 10, priceArea.y + 18, "#36b4ff", 12);
   drawText("SMA20", priceArea.x + 74, priceArea.y + 18, "#f7c843", 12);
   drawText("SMA60", priceArea.x + 150, priceArea.y + 18, "#ff5e67", 12);
-  drawText("買點: 10個交易日內累積跌幅 4%~6%", priceArea.x + 230, priceArea.y + 18, "rgba(255,255,255,0.75)", 12);
+  drawText("買點: 10個交易日收盤累積跌幅 4%~6%", priceArea.x + 230, priceArea.y + 18, "rgba(255,255,255,0.75)", 12);
 
   const volumeMax = Math.max(1, ...visibleVolume);
   const mapVolumeY = (value) => volumeArea.y + ((volumeMax - value) / volumeMax) * volumeArea.h;
@@ -838,11 +827,9 @@ function renderAll() {
   const chartResult = renderChart(stock);
   const latestReminder = getBuyReminderData(stock.code).latestSignal;
   const reminderText = latestReminder
-    ? `｜10日累積跌幅 ${formatNumber(latestReminder.dropPct, 2)}%${latestReminder.inRange ? "，達買點提醒" : ""}`
+    ? `｜10日收盤累積跌幅 ${formatNumber(latestReminder.dropPct, 2)}%${latestReminder.inRange ? "，達買點提醒" : ""}`
     : "";
   chartTitle.textContent = `${stock.code} ${stock.name}`;
-  closeInfo.textContent = `最新收盤價：${chartResult.lastClose != null ? formatNumber(chartResult.lastClose, 2) : "--"}${reminderText}`;
-  closeInfo.textContent = `最新收盤價：${chartResult.lastClose != null ? formatNumber(chartResult.lastClose, 2) : "--"}`;
   closeInfo.textContent = `最新收盤價：${chartResult.lastClose != null ? formatNumber(chartResult.lastClose, 2) : "--"}${reminderText}`;
   if (chartResult.fallback && state.timeframe !== "1d") {
     setStatus(`目前官方資料只有日 K，${stock.code} 已自動改用 1日顯示。`, "error");
