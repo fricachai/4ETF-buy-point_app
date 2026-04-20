@@ -705,7 +705,7 @@ function renderChart(stock) {
   const minPrice = baseMinPrice + verticalPriceShift;
   const maxPrice = baseMaxPrice + verticalPriceShift;
   const mapPriceY = (price) => priceArea.y + ((maxPrice - price) / (maxPrice - minPrice || 1)) * priceArea.h;
-  state.chartLayout.interaction.closeYByIndex = visible.map((candle) => Math.max(priceArea.y + 16, mapPriceY(candle.close) - 12));
+  state.chartLayout.interaction.closeYByIndex = visible.map((candle) => clamp(mapPriceY(candle.close), priceArea.y, priceArea.y + priceArea.h));
 
   for (let i = 0; i <= 6; i += 1) {
     const y = priceArea.y + (priceArea.h / 6) * i;
@@ -881,8 +881,7 @@ function renderChart(stock) {
 
     let axisValueText = "";
     if (activeHorizontalArea === priceArea) {
-      const value = maxPrice - ((lineY - priceArea.y) / priceArea.h) * (maxPrice - minPrice || 1);
-      axisValueText = formatNumber(value, 2);
+      axisValueText = hoveredCandle ? formatNumber(hoveredCandle.close, 2) : "";
     } else if (activeHorizontalArea === volumeArea) {
       const value = volumeMax - ((lineY - volumeArea.y) / volumeArea.h) * volumeMax;
       axisValueText = formatCompactNumber(Math.max(0, value));
