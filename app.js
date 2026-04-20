@@ -322,14 +322,14 @@ function detectDrawdownBuySignals(candles) {
   for (let i = 0; i < candles.length; i += 1) {
     const drawdown = calculateDrawdownWindow(candles, i);
     if (!drawdown) continue;
-    if (drawdown.inRange) {
-      signals.push({
-        index: i,
-        type: "drop-buy",
-        label: `${formatMonthDay(candles[i].date)} ${round(drawdown.dropPct, 2)}%`,
-        dropPct: drawdown.dropPct,
-      });
-    }
+      if (drawdown.inRange) {
+        signals.push({
+          index: i,
+          type: "drop-buy",
+          label: `${formatMonthDay(candles[i].date)} 跌幅 ${round(drawdown.dropPct, 2)}%`,
+          dropPct: drawdown.dropPct,
+        });
+      }
     if (i === candles.length - 1) latestSignal = drawdown;
   }
 
@@ -386,13 +386,20 @@ function detectBuySignals(candles, sma60, macd, kd) {
   return signals;
 }
 
-function drawSignalTag(x, y, label, type) {
+function getSignalTagMetrics(label) {
   const paddingX = 10;
   const height = 22;
-  const radius = 10;
   ctx.save();
   ctx.font = `12px "Segoe UI", "Noto Sans TC", sans-serif`;
   const width = ctx.measureText(label).width + paddingX * 2;
+  ctx.restore();
+  return { width, height, paddingX };
+}
+
+function drawSignalTag(x, y, label, type) {
+  const { width, height } = getSignalTagMetrics(label);
+  const radius = 10;
+  ctx.save();
   const boxX = x - width / 2;
   const boxY = y - height;
   const fill = type === "drop-buy" ? "rgba(255, 152, 17, 0.94)" : "rgba(255, 196, 67, 0.94)";
@@ -755,11 +762,48 @@ function renderChart(stock) {
   drawLineSeries(priceArea, candleWidth, panX, visibleSma60, mapPriceY, "#ff5e67", 2.2);
   ctx.restore();
 
+  const placedSignalBoxes = [];
   visibleSignals.forEach((signal) => {
     const candle = visible[signal.visibleIndex];
     const x = priceArea.x + signal.visibleIndex * candleWidth + candleWidth / 2 + panX;
-    const y = Math.max(priceArea.y + 26, mapPriceY(candle.high) - 18);
-    drawSignalTag(x, y, signal.label, signal.type);
+    const { width, height } = getSignalTagMetrics(signal.label);
+    const baseY = mapPriceY(candle.high) - 34;
+    let drawY = baseY;
+    let placed = false;
+
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const boxX = x - width / 2;
+      const boxY = drawY - height;
+      const boxBottom = boxY + height;
+      const inBounds = (
+        boxX >= priceArea.x + 4
+        && boxX + width <= priceArea.x + priceArea.w - 4
+        && boxY >= priceArea.y + 28
+        && boxBottom <= priceArea.y + priceArea.h - 8
+      );
+      const overlaps = placedSignalBoxes.some((rect) => (
+        boxX < rect.right + 8
+        && boxX + width > rect.left - 8
+        && boxY < rect.bottom + 10
+        && boxBottom > rect.top - 10
+      ));
+
+      if (inBounds && !overlaps) {
+        drawSignalTag(x, drawY, signal.label, signal.type);
+        placedSignalBoxes.push({
+          left: boxX,
+          right: boxX + width,
+          top: boxY,
+          bottom: boxBottom,
+        });
+        placed = true;
+        break;
+      }
+
+      drawY -= height + 14;
+    }
+
+    if (!placed) return;
   });
 
   drawText("SMA5", priceArea.x + 10, priceArea.y + 18, "#36b4ff", 12);
