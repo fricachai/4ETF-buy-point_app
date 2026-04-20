@@ -40,7 +40,7 @@ const state = {
   rawCandlesByCode: new Map(),
   selectedCode: null,
   loadingCodes: new Set(),
-  chartView: { visibleCount: 36, priceScale: 1, hoverZone: "", hoverX: null, barOffset: 0, panX: 0, panY: 0 },
+  chartView: { visibleCount: 36, priceScale: 1, hoverZone: "", hoverX: null, hoverY: null, hoverIndex: null, barOffset: 0, panX: 0, panY: 0 },
   chartLayout: null,
   timeframe: "1d",
   dragState: null,
@@ -432,6 +432,37 @@ function formatDate(dateStr) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+function formatDayOnly(dateStr) {
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return dateStr;
+  return String(d.getDate());
+}
+
+function formatXAxisLabel(dateStr, anchorDateStr = "") {
+  if (!anchorDateStr) return formatDate(dateStr);
+  const current = new Date(dateStr);
+  const anchor = new Date(anchorDateStr);
+  if (Number.isNaN(current.getTime()) || Number.isNaN(anchor.getTime())) return formatDate(dateStr);
+  if (current.getFullYear() === anchor.getFullYear() && current.getMonth() === anchor.getMonth()) {
+    return formatDayOnly(dateStr);
+  }
+  return formatDate(dateStr);
+}
+
+function drawAxisValueTag(area, y, valueText) {
+  const paddingX = 8;
+  const height = 20;
+  const radius = 8;
+  ctx.save();
+  ctx.font = `12px "Segoe UI", "Noto Sans TC", sans-serif`;
+  const width = ctx.measureText(valueText).width + paddingX * 2;
+  const boxX = area.x + 6;
+  const boxY = clamp(y - height / 2, area.y, area.y + area.h - height);
+  drawRoundRect(boxX, boxY, width, height, radius, "rgba(18, 21, 27, 0.94)", "rgba(255,255,255,0.24)");
+  drawText(valueText, boxX + width / 2, boxY + 14, "#f5f6fa", 12, "center");
+  ctx.restore();
+}
+
 function getNativeIntervalHours(candles) {
   if (candles.length < 2) return 24;
   let minDiff = Number.POSITIVE_INFINITY;
@@ -496,6 +527,9 @@ function resetChartView() {
   state.chartView.barOffset = 0;
   state.chartView.panX = 0;
   state.chartView.panY = 0;
+  state.chartView.hoverX = null;
+  state.chartView.hoverY = null;
+  state.chartView.hoverIndex = null;
 }
 
 function getSeriesRange(seriesList, fallbackMin, fallbackMax) {
@@ -612,6 +646,32 @@ function renderChart(stock) {
   const visibleSignals = buySignals
     .filter((signal) => signal.index >= startIndex && signal.index < endIndex)
     .map((signal) => ({ ...signal, visibleIndex: signal.index - startIndex }));
+  const candleWidth = priceArea.w / visible.length;
+  const panX = state.chartView.panX;
+  state.chartLayout = {
+    priceArea,
+    xAxisArea,
+    priceScaleArea,
+    volumeArea,
+    macdArea,
+    kdjArea,
+    interaction: {
+      startIndex,
+      endIndex,
+      candleWidth,
+      panX,
+      plotLeft: priceArea.x,
+      visibleLength: visible.length,
+    },
+  };
+  const hoverIndex = state.chartView.hoverIndex != null ? clamp(state.chartView.hoverIndex, 0, visible.length - 1) : null;
+  const hoveredCandle = hoverIndex != null ? visible[hoverIndex] : null;
+  const hoveredVolume = hoverIndex != null ? visibleVolume[hoverIndex] ?? null : null;
+  const hoveredMacdHist = hoverIndex != null ? visibleMacdHist[hoverIndex] : null;
+  const hoveredMacdDif = hoverIndex != null ? visibleMacdDif[hoverIndex] : null;
+  const hoveredMacdDea = hoverIndex != null ? visibleMacdDea[hoverIndex] : null;
+  const hoveredK = hoverIndex != null ? visibleK[hoverIndex] : null;
+  const hoveredD = hoverIndex != null ? visibleD[hoverIndex] : null;
 
   const priceRangeSource = [
     ...visible.map((c) => c.low),
@@ -654,8 +714,6 @@ function renderChart(stock) {
   ctx.lineTo(priceScaleArea.x, priceArea.y + priceArea.h);
   ctx.stroke();
 
-  const candleWidth = priceArea.w / visible.length;
-  const panX = state.chartView.panX;
   ctx.save();
   ctx.beginPath();
   ctx.rect(priceArea.x, priceArea.y, priceArea.w, priceArea.h);
@@ -763,28 +821,80 @@ function renderChart(stock) {
   ctx.restore();
 
   drawText("成交量", volumeArea.x, volumeArea.y - 12, "#97a0af", 14);
-  drawText("MACD", macdArea.x, macdArea.y - 12, "#97a0af", 14);
-  drawText("KD", kdjArea.x, kdjArea.y - 12, "#97a0af", 14);
+  const volumeTitle = hoveredCandle ? `成交量 ${formatCompactNumber(hoveredVolume)}` : "成交量";
+  const macdTitle = hoveredCandle
+    ? `MACD DIF ${formatNumber(hoveredMacdDif, 2)} DEA ${formatNumber(hoveredMacdDea, 2)} HIST ${formatNumber(hoveredMacdHist, 2)}`
+    : "MACD";
+  const kdTitle = hoveredCandle
+    ? `KD K ${formatNumber(hoveredK, 2)} D ${formatNumber(hoveredD, 2)}`
+    : "KD";
+  drawText(volumeTitle, volumeArea.x, volumeArea.y - 12, "#97a0af", 14);
+  drawText(macdTitle, macdArea.x, macdArea.y - 12, "#97a0af", 14);
+  drawText(kdTitle, kdjArea.x, kdjArea.y - 12, "#97a0af", 14);
 
   if (state.chartView.hoverX != null) {
-    const lineLeft = priceArea.x;
-    const lineRight = xAxisArea.x + xAxisArea.w;
-    const lineX = clamp(state.chartView.hoverX, lineLeft, lineRight);
-    ctx.strokeStyle = "rgba(255,255,255,0.9)";
+    const lineX = clamp(state.chartView.hoverX, priceArea.x, priceArea.x + priceArea.w);
+    ctx.save();
+    ctx.strokeStyle = "rgba(255,255,255,0.82)";
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(lineX, priceArea.y);
     ctx.lineTo(lineX, kdjArea.y + kdjArea.h);
     ctx.stroke();
+    ctx.restore();
   }
 
-  const leftDate = formatDate(visible[0].date);
-  const midDate = formatDate(visible[Math.floor((visible.length - 1) / 2)].date);
-  const rightDate = formatDate(visible[visible.length - 1].date);
-  drawText(leftDate, xAxisArea.x + 4, xAxisArea.y + 24, "#97a0af", 12);
-  drawText(midDate, xAxisArea.x + xAxisArea.w / 2, xAxisArea.y + 24, "#97a0af", 12, "center");
-  drawText(rightDate, xAxisArea.x + xAxisArea.w - 4, xAxisArea.y + 24, "#97a0af", 12, "right");
-  drawText("時間軸: 滾輪縮放", xAxisArea.x + 10, xAxisArea.y + 12, state.chartView.hoverZone === "xAxis" ? "#ffe27a" : "rgba(151,160,175,0.85)", 11);
+  const activeHorizontalArea = state.chartView.hoverZone === "priceArea"
+    ? priceArea
+    : state.chartView.hoverZone === "volumeArea"
+      ? volumeArea
+      : state.chartView.hoverZone === "macdArea"
+        ? macdArea
+        : state.chartView.hoverZone === "kdjArea"
+          ? kdjArea
+          : null;
+  if (activeHorizontalArea && state.chartView.hoverY != null) {
+    const lineY = clamp(state.chartView.hoverY, activeHorizontalArea.y, activeHorizontalArea.y + activeHorizontalArea.h);
+    ctx.save();
+    ctx.strokeStyle = "rgba(255,255,255,0.68)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([6, 6]);
+    ctx.beginPath();
+    ctx.moveTo(activeHorizontalArea.x, lineY);
+    ctx.lineTo(activeHorizontalArea.x + activeHorizontalArea.w, lineY);
+    ctx.stroke();
+    ctx.restore();
+
+    let axisValueText = "";
+    if (activeHorizontalArea === priceArea) {
+      const value = maxPrice - ((lineY - priceArea.y) / priceArea.h) * (maxPrice - minPrice || 1);
+      axisValueText = formatNumber(value, 2);
+    } else if (activeHorizontalArea === volumeArea) {
+      const value = volumeMax - ((lineY - volumeArea.y) / volumeArea.h) * volumeMax;
+      axisValueText = formatCompactNumber(Math.max(0, value));
+    } else if (activeHorizontalArea === macdArea) {
+      const value = macdMax - ((lineY - macdArea.y) / macdArea.h) * (macdMax - macdMin || 1);
+      axisValueText = formatNumber(value, 2);
+    } else if (activeHorizontalArea === kdjArea) {
+      const value = kdMax - ((lineY - kdjArea.y) / kdjArea.h) * (kdMax - kdMin || 1);
+      axisValueText = formatNumber(value, 2);
+    }
+    if (axisValueText) drawAxisValueTag(activeHorizontalArea, lineY, axisValueText);
+  }
+
+  const tickStep = Math.max(1, Math.ceil(visible.length / 8));
+  let anchorDate = "";
+  for (let i = 0; i < visible.length; i += tickStep) {
+    const candle = visible[i];
+    const label = formatXAxisLabel(candle.date, anchorDate);
+    if (!anchorDate) anchorDate = candle.date;
+    const x = xAxisArea.x + i * candleWidth + candleWidth / 2 + panX;
+    drawText(label, x, xAxisArea.y + 24, "#97a0af", 12, "center");
+  }
+  const lastLabel = formatXAxisLabel(visible[visible.length - 1].date, anchorDate);
+  drawText(lastLabel, xAxisArea.x + xAxisArea.w - 4, xAxisArea.y + 24, "#97a0af", 12, "right");
+  if (hoveredCandle) drawAxisValueTag(xAxisArea, xAxisArea.y + xAxisArea.h / 2, formatDate(hoveredCandle.date));
+  drawText("時間軸: 日資料吸附顯示", xAxisArea.x + 10, xAxisArea.y + 12, state.chartView.hoverZone === "xAxis" ? "#ffe27a" : "rgba(151,160,175,0.85)", 11);
   drawText("價格軸: 滾輪縮放", priceScaleArea.x + priceScaleArea.w - 6, priceScaleArea.y + priceScaleArea.h + 16, state.chartView.hoverZone === "priceScale" ? "#7ab5ff" : "rgba(151,160,175,0.85)", 11, "right");
   return { effectiveTimeframe, fallback, lastClose: lastCandle.close };
 }
@@ -1129,6 +1239,9 @@ function detectChartZone(point) {
   if (!layout) return "";
   const inBox = (box) => point.x >= box.x && point.x <= box.x + box.w && point.y >= box.y && point.y <= box.y + box.h;
   if (inBox(layout.priceArea)) return "priceArea";
+  if (inBox(layout.volumeArea)) return "volumeArea";
+  if (inBox(layout.macdArea)) return "macdArea";
+  if (inBox(layout.kdjArea)) return "kdjArea";
   if (inBox(layout.xAxisArea)) return "xAxis";
   if (inBox(layout.priceScaleArea)) return "priceScale";
   return "";
@@ -1138,17 +1251,38 @@ function updateHoverCrosshair(point) {
   const layout = state.chartLayout;
   if (!layout) {
     state.chartView.hoverX = null;
+    state.chartView.hoverY = null;
+    state.chartView.hoverIndex = null;
     return;
   }
-  const left = layout.priceArea.x;
-  const right = layout.xAxisArea.x + layout.xAxisArea.w;
-  const top = layout.priceArea.y;
-  const bottom = layout.kdjArea.y + layout.kdjArea.h;
-  if (point.x >= left && point.x <= right && point.y >= top && point.y <= bottom) {
-    state.chartView.hoverX = point.x;
-  } else {
+  const interaction = layout.interaction;
+  if (!interaction) {
     state.chartView.hoverX = null;
+    state.chartView.hoverY = null;
+    state.chartView.hoverIndex = null;
+    return;
   }
+  const areaByZone = {
+    priceArea: layout.priceArea,
+    volumeArea: layout.volumeArea,
+    macdArea: layout.macdArea,
+    kdjArea: layout.kdjArea,
+  };
+  const activeArea = areaByZone[state.chartView.hoverZone];
+  const left = layout.priceArea.x;
+  const right = layout.priceArea.x + layout.priceArea.w;
+  const snapZones = new Set(["priceArea", "volumeArea", "macdArea", "kdjArea", "xAxis"]);
+  if (!snapZones.has(state.chartView.hoverZone) || point.x < left || point.x > right) {
+    state.chartView.hoverX = null;
+    state.chartView.hoverY = null;
+    state.chartView.hoverIndex = null;
+    return;
+  }
+  const rawIndex = Math.round((point.x - (interaction.plotLeft + interaction.panX + interaction.candleWidth / 2)) / interaction.candleWidth);
+  const hoverIndex = clamp(rawIndex, 0, interaction.visibleLength - 1);
+  state.chartView.hoverIndex = hoverIndex;
+  state.chartView.hoverX = interaction.plotLeft + hoverIndex * interaction.candleWidth + interaction.candleWidth / 2 + interaction.panX;
+  state.chartView.hoverY = activeArea ? clamp(point.y, activeArea.y, activeArea.y + activeArea.h) : null;
 }
 
 canvas.addEventListener("wheel", (event) => {
@@ -1165,6 +1299,7 @@ canvas.addEventListener("pointermove", (event) => {
   const point = getCanvasPoint(event);
   if (state.dragState) {
     event.preventDefault();
+    state.chartView.hoverZone = "priceArea";
     updateHoverCrosshair(point);
     const dx = point.x - state.dragState.startX;
     const dy = point.y - state.dragState.startY;
@@ -1191,7 +1326,13 @@ canvas.addEventListener("pointermove", (event) => {
   const zone = detectChartZone(point);
   state.chartView.hoverZone = zone;
   updateHoverCrosshair(point);
-  canvas.style.cursor = zone === "xAxis" ? "ew-resize" : zone === "priceScale" ? "ns-resize" : zone === "priceArea" ? "grab" : "default";
+  canvas.style.cursor = zone === "xAxis"
+    ? "ew-resize"
+    : zone === "priceScale"
+      ? "ns-resize"
+      : ["priceArea", "volumeArea", "macdArea", "kdjArea"].includes(zone)
+        ? "crosshair"
+        : "default";
   renderAll();
 });
 
@@ -1199,6 +1340,8 @@ canvas.addEventListener("pointerleave", () => {
   if (!state.dragState) {
     state.chartView.hoverZone = "";
     state.chartView.hoverX = null;
+    state.chartView.hoverY = null;
+    state.chartView.hoverIndex = null;
     canvas.style.cursor = "default";
     renderAll();
   }
@@ -1234,7 +1377,7 @@ const clearDragState = (event) => {
     canvas.releasePointerCapture(event.pointerId);
   }
   state.dragState = null;
-  canvas.style.cursor = state.chartView.hoverZone === "priceArea" ? "grab" : "default";
+  canvas.style.cursor = ["priceArea", "volumeArea", "macdArea", "kdjArea"].includes(state.chartView.hoverZone) ? "crosshair" : "default";
 };
 
 canvas.addEventListener("pointerup", clearDragState);
