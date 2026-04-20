@@ -8,154 +8,110 @@ from pathlib import Path
 
 
 RECIPIENT_EMAIL = "fricachai@gmail.com"
-TRACKED_STOCKS = {
-    "0050": {"name": "元大台灣50", "path": Path("data/0050.json")},
-    "2330": {"name": "台積電", "path": Path("data/2330.json")},
+BUY_REMINDER_LOOKBACK = 10
+TRACKED_ETFS = {
+    "0050": {
+        "name": "元大台灣50",
+        "path": Path("data/0050.json"),
+        "min_drop": 5.0,
+        "max_drop": 7.0,
+        "add_on_drop": 7.0,
+    },
+    "0056": {
+        "name": "元大高股息",
+        "path": Path("data/0056.json"),
+        "min_drop": 6.0,
+        "max_drop": 8.0,
+        "add_on_drop": 8.0,
+    },
+    "00878": {
+        "name": "國泰永續高股息",
+        "path": Path("data/00878.json"),
+        "min_drop": 5.0,
+        "max_drop": 5.0,
+        "add_on_drop": 5.0,
+    },
+    "006208": {
+        "name": "富邦台50",
+        "path": Path("data/006208.json"),
+        "min_drop": 5.0,
+        "max_drop": 7.0,
+        "add_on_drop": 7.0,
+    },
 }
-
-
-def sma(values: list[float], length: int) -> list[float | None]:
-    result: list[float | None] = [None] * len(values)
-    total = 0.0
-    count = 0
-    for index, value in enumerate(values):
-        total += value
-        count += 1
-        if index >= length:
-            total -= values[index - length]
-            count -= 1
-        if index >= length - 1 and count > 0:
-            result[index] = total / count
-    return result
-
-
-def ema(values: list[float], length: int) -> list[float | None]:
-    result: list[float | None] = [None] * len(values)
-    alpha = 2 / (length + 1)
-    prev = None
-    for index, value in enumerate(values):
-        prev = value if prev is None else value * alpha + prev * (1 - alpha)
-        result[index] = prev
-    return result
-
-
-def compute_macd(closes: list[float]) -> dict[str, list[float | None]]:
-    ema12 = ema(closes, 12)
-    ema26 = ema(closes, 26)
-    dif = [
-        ema12[index] - ema26[index] if ema12[index] is not None and ema26[index] is not None else None
-        for index in range(len(closes))
-    ]
-    dea = ema([value if value is not None else 0 for value in dif], 9)
-    hist = [
-        (dif[index] - dea[index]) * 2 if dif[index] is not None and dea[index] is not None else None
-        for index in range(len(closes))
-    ]
-    return {"dif": dif, "dea": dea, "hist": hist}
-
-
-def compute_kd(candles: list[dict]) -> dict[str, list[float | None]]:
-    k: list[float | None] = [None] * len(candles)
-    d: list[float | None] = [None] * len(candles)
-    prev_k = 50.0
-    prev_d = 50.0
-    for index in range(len(candles)):
-        window = candles[max(0, index - 8): index + 1]
-        highest = max(item["high"] for item in window)
-        lowest = min(item["low"] for item in window)
-        rsv = 50.0 if highest == lowest else ((candles[index]["close"] - lowest) / (highest - lowest)) * 100
-        current_k = (2 / 3) * prev_k + (1 / 3) * rsv
-        current_d = (2 / 3) * prev_d + (1 / 3) * current_k
-        k[index] = current_k
-        d[index] = current_d
-        prev_k = current_k
-        prev_d = current_d
-    return {"k": k, "d": d}
-
-
-def recent_min(series: list[float | None], end_index: int, lookback: int, fallback: float) -> float:
-    values = [value for value in series[max(0, end_index - lookback + 1): end_index + 1] if value is not None]
-    return min(values) if values else fallback
-
-
-def detect_buy_signals(candles: list[dict]) -> list[dict]:
-    closes = [float(item["close"]) for item in candles]
-    sma60 = sma(closes, 60)
-    macd = compute_macd(closes)
-    kd = compute_kd(candles)
-    signals: list[dict] = []
-    last_signal_index = -10
-
-    for index in range(60, len(candles)):
-        candle = candles[index]
-        prev = candles[index - 1]
-        base = sma60[index]
-        if base is None:
-            continue
-
-        recent_hist_min = recent_min(macd["hist"], index, 6, 0)
-        recent_k_min = recent_min(kd["k"], index, 6, 50)
-        recent_d_min = recent_min(kd["d"], index, 6, 50)
-        touched_base = candle["low"] <= base * 1.002 and candle["high"] >= base * 0.998
-        reclaim_signal = candle["low"] < base * 0.998 and candle["close"] >= base * 0.995
-        close_to_base_pct = (candle["low"] - base) / base
-        near_but_untouched = close_to_base_pct > 0.002 and close_to_base_pct <= 0.018 and candle["low"] > base * 1.002
-        rebound_start = (
-            candle["close"] > candle["open"]
-            and candle["close"] > prev["close"]
-            and candle["close"] >= candle["high"] - (candle["high"] - candle["low"]) * 0.45
-        )
-        macd_turning_up = (
-            macd["hist"][index] is not None
-            and macd["hist"][index - 1] is not None
-            and macd["dif"][index] is not None
-            and macd["dif"][index - 1] is not None
-            and macd["hist"][index] > macd["hist"][index - 1]
-            and macd["dif"][index] >= macd["dif"][index - 1]
-            and recent_hist_min <= 0
-        )
-        kd_turning_up = (
-            kd["k"][index] is not None
-            and kd["d"][index] is not None
-            and kd["k"][index - 1] is not None
-            and kd["d"][index - 1] is not None
-            and ((kd["k"][index] > kd["d"][index] and kd["k"][index - 1] <= kd["d"][index - 1]) or (kd["k"][index] > kd["k"][index - 1] and kd["d"][index] >= kd["d"][index - 1]))
-            and min(recent_k_min, recent_d_min) <= 35
-        )
-        early_signal = near_but_untouched and rebound_start and (macd_turning_up or kd_turning_up)
-
-        if (touched_base or reclaim_signal or early_signal) and index - last_signal_index >= 4:
-            signals.append(
-                {
-                    "index": index,
-                    "date": candle["date"][:10],
-                    "close": candle["close"],
-                    "type": "收復60日線" if reclaim_signal else "接近60日線轉強" if early_signal else "壓到60日線",
-                }
-            )
-            last_signal_index = index
-    return signals
 
 
 def load_candles(path: Path) -> list[dict]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def format_rule_text(min_drop: float, max_drop: float, add_on_drop: float) -> str:
+    if min_drop == max_drop:
+        return f"10個交易日收盤價跌幅 -{min_drop:.0f}% ( -{add_on_drop:.0f}% 時加碼 報酬率最高)"
+    return (
+        f"10個交易日收盤價跌幅 -{min_drop:.0f}% ~ -{max_drop:.0f}% "
+        f"( -{add_on_drop:.0f}% 時加碼 報酬率最高)"
+    )
+
+
+def calculate_drawdown_window(candles: list[dict], end_index: int, lookback: int = BUY_REMINDER_LOOKBACK) -> dict | None:
+    if end_index < 0 or end_index >= len(candles):
+        return None
+
+    start_index = end_index - lookback + 1
+    if start_index < 0:
+        return None
+
+    base_close = None
+    base_index = -1
+    for index in range(start_index, end_index + 1):
+        close = float(candles[index]["close"])
+        if base_close is None or close > base_close:
+            base_close = close
+            base_index = index
+
+    current_close = float(candles[end_index]["close"])
+    if base_close is None or base_close <= 0:
+        return None
+
+    drop_pct = ((base_close - current_close) / base_close) * 100
+    return {
+        "base_index": base_index,
+        "base_close": base_close,
+        "current_close": current_close,
+        "drop_pct": drop_pct,
+    }
+
+
 def build_alert_lines() -> list[str]:
     lines: list[str] = []
-    for code, config in TRACKED_STOCKS.items():
+
+    for code, config in TRACKED_ETFS.items():
         candles = load_candles(config["path"])
-        signals = detect_buy_signals(candles)
-        if not signals:
+        if not candles:
             continue
-        latest_signal = signals[-1]
-        latest_date = candles[-1]["date"][:10]
-        if latest_signal["date"] != latest_date:
+
+        latest_index = len(candles) - 1
+        drawdown = calculate_drawdown_window(candles, latest_index)
+        if not drawdown:
             continue
+
+        drop_pct = drawdown["drop_pct"]
+        if not (config["min_drop"] <= drop_pct <= config["max_drop"]):
+            continue
+
+        latest_candle = candles[latest_index]
+        base_candle = candles[drawdown["base_index"]]
+        rule_text = format_rule_text(config["min_drop"], config["max_drop"], config["add_on_drop"])
         lines.append(
-            f"{code} {config['name']} 在 {latest_signal['date']} 出現買點："
-            f"{latest_signal['type']}，收盤 {latest_signal['close']:.2f}"
+            (
+                f"{code} {config['name']} | 日期 {latest_candle['date'][:10]} | "
+                f"買點成立 | 目前跌幅 {drop_pct:.2f}% | "
+                f"基準收盤 {drawdown['base_close']:.2f} ({base_candle['date'][:10]}) | "
+                f"當日收盤 {drawdown['current_close']:.2f} | {rule_text}"
+            )
         )
+
     return lines
 
 
@@ -165,17 +121,20 @@ def send_email(lines: list[str]) -> None:
     username = os.environ.get("SMTP_USERNAME")
     password = os.environ.get("SMTP_PASSWORD")
     sender = os.environ.get("ALERT_FROM_EMAIL") or username
+
     if not all([host, username, password, sender]):
-        raise RuntimeError("Missing SMTP configuration. Set SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, ALERT_FROM_EMAIL.")
+        raise RuntimeError(
+            "Missing SMTP configuration. Set SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, ALERT_FROM_EMAIL."
+        )
 
     message = EmailMessage()
-    message["Subject"] = "0050 / 2330 買點提醒"
+    message["Subject"] = "4檔ETF買點提醒"
     message["From"] = sender
     message["To"] = RECIPIENT_EMAIL
     message.set_content(
-        "偵測到符合 60 日線買點條件的提醒：\n\n"
+        "下列 ETF 在最新交易日出現買點提醒：\n\n"
         + "\n".join(f"- {line}" for line in lines)
-        + "\n\n此信由 GitHub Actions 自動寄送。"
+        + "\n\n此信件由 GitHub Actions 自動發送。"
     )
 
     with smtplib.SMTP(host, port, timeout=30) as server:
@@ -187,8 +146,9 @@ def send_email(lines: list[str]) -> None:
 def main() -> None:
     lines = build_alert_lines()
     if not lines:
-        print("No buy alerts today.")
+        print("No ETF buy alerts today.")
         return
+
     send_email(lines)
     print("\n".join(lines))
 
