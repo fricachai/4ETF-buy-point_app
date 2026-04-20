@@ -763,14 +763,26 @@ function renderChart(stock) {
   ctx.restore();
 
   const placedSignalBoxes = [];
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(priceArea.x, priceArea.y, priceArea.w, priceArea.h);
+  ctx.clip();
   visibleSignals.forEach((signal) => {
     const candle = visible[signal.visibleIndex];
     const x = priceArea.x + signal.visibleIndex * candleWidth + candleWidth / 2 + panX;
     const { width, height } = getSignalTagMetrics(signal.label);
-    const baseY = mapPriceY(candle.high) - 34;
-    let drawY = baseY;
-    let placed = false;
+    const baseY = mapPriceY(candle.high) - 54;
+    const initialBoxY = baseY - height;
+    const initialBoxBottom = initialBoxY + height;
+    const initialInBounds = (
+      x - width / 2 >= priceArea.x + 4
+      && x + width / 2 <= priceArea.x + priceArea.w - 4
+      && initialBoxY >= priceArea.y + 36
+      && initialBoxBottom <= priceArea.y + priceArea.h - 20
+    );
+    if (!initialInBounds) return;
 
+    let drawY = baseY;
     for (let attempt = 0; attempt < 8; attempt += 1) {
       const boxX = x - width / 2;
       const boxY = drawY - height;
@@ -778,17 +790,19 @@ function renderChart(stock) {
       const inBounds = (
         boxX >= priceArea.x + 4
         && boxX + width <= priceArea.x + priceArea.w - 4
-        && boxY >= priceArea.y + 28
-        && boxBottom <= priceArea.y + priceArea.h - 8
+        && boxY >= priceArea.y + 36
+        && boxBottom <= priceArea.y + priceArea.h - 20
       );
+      if (!inBounds) break;
+
       const overlaps = placedSignalBoxes.some((rect) => (
-        boxX < rect.right + 8
-        && boxX + width > rect.left - 8
-        && boxY < rect.bottom + 10
-        && boxBottom > rect.top - 10
+        boxX < rect.right + 10
+        && boxX + width > rect.left - 10
+        && boxY < rect.bottom + 12
+        && boxBottom > rect.top - 12
       ));
 
-      if (inBounds && !overlaps) {
+      if (!overlaps) {
         drawSignalTag(x, drawY, signal.label, signal.type);
         placedSignalBoxes.push({
           left: boxX,
@@ -796,15 +810,13 @@ function renderChart(stock) {
           top: boxY,
           bottom: boxBottom,
         });
-        placed = true;
-        break;
+        return;
       }
 
-      drawY -= height + 14;
+      drawY -= height + 18;
     }
-
-    if (!placed) return;
   });
+  ctx.restore();
 
   drawText("SMA5", priceArea.x + 10, priceArea.y + 18, "#36b4ff", 12);
   drawText("SMA20", priceArea.x + 74, priceArea.y + 18, "#f7c843", 12);
