@@ -579,13 +579,14 @@ function drawXAxisHoverTag(area, x, valueText) {
   const paddingX = 10;
   const height = 22;
   const radius = 8;
+  const textBaselineY = area.y + 24;
   ctx.save();
   ctx.font = `12px "Segoe UI", "Noto Sans TC", sans-serif`;
   const width = ctx.measureText(valueText).width + paddingX * 2;
   const boxX = clamp(x - width / 2, area.x + 4, area.x + area.w - width - 4);
-  const boxY = area.y + area.h - height - 4;
+  const boxY = clamp(textBaselineY - 15, area.y + 2, area.y + area.h - height - 2);
   drawRoundRect(boxX, boxY, width, height, radius, "rgba(71, 85, 130, 0.96)", "rgba(255,255,255,0.26)");
-  drawText(valueText, boxX + width / 2, boxY + 15, "#f5f6fa", 12, "center");
+  drawText(valueText, boxX + width / 2, textBaselineY, "#f5f6fa", 12, "center");
   ctx.restore();
 }
 
