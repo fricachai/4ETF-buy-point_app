@@ -658,6 +658,7 @@ function renderChart(stock) {
   const macd = computeMacd(candles);
   const kd = computeKd(candles);
   const cci = computeCci(candles);
+  const cciMa = sma(cci, 14);
   const buySignalData = detectDrawdownBuySignals(candles, stock.code);
   const buySignals = buySignalData.signals;
   const lastCandle = candles[candles.length - 1];
@@ -721,6 +722,7 @@ function renderChart(stock) {
   const visibleMacdDif = macd.dif.slice(startIndex, endIndex);
   const visibleMacdDea = macd.dea.slice(startIndex, endIndex);
   const visibleCci = cci.slice(startIndex, endIndex);
+  const visibleCciMa = cciMa.slice(startIndex, endIndex);
   const visibleK = kd.k.slice(startIndex, endIndex);
   const visibleD = kd.d.slice(startIndex, endIndex);
   const visibleSignals = buySignals
@@ -752,6 +754,7 @@ function renderChart(stock) {
   const hoveredMacdDif = hoverIndex != null ? visibleMacdDif[hoverIndex] : null;
   const hoveredMacdDea = hoverIndex != null ? visibleMacdDea[hoverIndex] : null;
   const hoveredCci = hoverIndex != null ? visibleCci[hoverIndex] : null;
+  const hoveredCciMa = hoverIndex != null ? visibleCciMa[hoverIndex] : null;
   const hoveredK = hoverIndex != null ? visibleK[hoverIndex] : null;
   const hoveredD = hoverIndex != null ? visibleD[hoverIndex] : null;
 
@@ -929,7 +932,7 @@ function renderChart(stock) {
   drawLineSeries(macdArea, candleWidth, panX, visibleMacdDea, mapMacdY, "#ff9f1a", 2);
   ctx.restore();
 
-  const cciRange = getSeriesRange([visibleCci], -200, 200);
+  const cciRange = getSeriesRange([visibleCci, visibleCciMa], -200, 200);
   const cciMin = Math.min(-200, cciRange.min);
   const cciMax = Math.max(200, cciRange.max);
   const mapCciY = (value) => cciArea.y + ((cciMax - value) / (cciMax - cciMin || 1)) * cciArea.h;
@@ -947,7 +950,8 @@ function renderChart(stock) {
     ctx.stroke();
     ctx.setLineDash([]);
   });
-  drawLineSeries(cciArea, candleWidth, panX, visibleCci, mapCciY, "#9d7bff", 2);
+  drawLineSeries(cciArea, candleWidth, panX, visibleCci, mapCciY, "#3f6cff", 2);
+  drawLineSeries(cciArea, candleWidth, panX, visibleCciMa, mapCciY, "#f7c843", 2);
   ctx.restore();
 
   const kdRange = getSeriesRange([visibleK, visibleD], 0, 100);
@@ -978,7 +982,7 @@ function renderChart(stock) {
     ? `MACD DIF ${formatNumber(hoveredMacdDif, 2)} DEA ${formatNumber(hoveredMacdDea, 2)} HIST ${formatNumber(hoveredMacdHist, 2)}`
     : "MACD";
   const cciTitle = hoveredCandle
-    ? `CCI ${formatNumber(hoveredCci, 2)}`
+    ? `CCI ${formatNumber(hoveredCci, 2)} MA ${formatNumber(hoveredCciMa, 2)}`
     : "CCI";
   const kdTitle = hoveredCandle
     ? `KD K ${formatNumber(hoveredK, 2)} D ${formatNumber(hoveredD, 2)}`
