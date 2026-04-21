@@ -1,5 +1,6 @@
 const canvas = document.getElementById("chartCanvas");
 const ctx = canvas.getContext("2d");
+const appShell = document.getElementById("appShell");
 const chartTitle = document.getElementById("chartTitle");
 const closeInfo = document.getElementById("closeInfo");
 const watchlistEl = document.getElementById("watchlist");
@@ -11,6 +12,13 @@ const statusText = document.getElementById("statusText");
 const watchlistFileInput = document.getElementById("watchlistFileInput");
 const priceFileInput = document.getElementById("priceFileInput");
 const timeframeSelect = document.getElementById("timeframeSelect");
+const loginGate = document.getElementById("loginGate");
+const loginForm = document.getElementById("loginForm");
+const loginUsername = document.getElementById("loginUsername");
+const loginPassword = document.getElementById("loginPassword");
+const rememberLogin = document.getElementById("rememberLogin");
+const loginStatus = document.getElementById("loginStatus");
+const logoutButton = document.getElementById("logoutButton");
 const authorCard = document.querySelector(".author-card");
 const authorBubbles = [...document.querySelectorAll(".author-bubble")];
 const authorOrbitBall = document.querySelector(".author-orbit-ball");
@@ -50,9 +58,51 @@ const state = {
   dragState: null,
 };
 
+const AUTH_CONFIG = {
+  usernames: ["frica", "jimmy"],
+  password: "stock2026",
+};
+const AUTH_STORAGE_KEY = "stock-observe-panel-auth";
+
+let appStarted = false;
+
 function setStatus(message, type = "") {
   statusText.textContent = message;
   statusText.className = `status-text${type ? ` ${type}` : ""}`;
+}
+
+function getAuthStorage(remember) {
+  return remember ? window.localStorage : window.sessionStorage;
+}
+
+function hasStoredAuth() {
+  return (
+    window.localStorage.getItem(AUTH_STORAGE_KEY) === "1"
+    || window.sessionStorage.getItem(AUTH_STORAGE_KEY) === "1"
+  );
+}
+
+function persistAuth(remember) {
+  window.localStorage.removeItem(AUTH_STORAGE_KEY);
+  window.sessionStorage.removeItem(AUTH_STORAGE_KEY);
+  getAuthStorage(remember).setItem(AUTH_STORAGE_KEY, "1");
+}
+
+function clearAuth() {
+  window.localStorage.removeItem(AUTH_STORAGE_KEY);
+  window.sessionStorage.removeItem(AUTH_STORAGE_KEY);
+}
+
+function setGateLocked(locked) {
+  document.body.classList.toggle("auth-locked", locked);
+  appShell.classList.toggle("app-shell--hidden", locked);
+  appShell.setAttribute("aria-hidden", locked ? "true" : "false");
+  loginGate.classList.toggle("login-gate--hidden", !locked);
+}
+
+function setLoginStatus(message, type = "") {
+  loginStatus.textContent = message;
+  loginStatus.className = `login-status${type ? ` ${type}` : ""}`;
 }
 
 function clamp(value, min, max) {
@@ -1627,7 +1677,6 @@ async function bootstrap() {
 }
 
 async function bootstrapDefaultEtfs() {
-  initAuthorCardEffects();
   state.stocks = [];
   state.rawCandlesByCode.clear();
   DEFAULT_STOCKS.forEach(upsertStock);
@@ -1639,4 +1688,47 @@ async function bootstrapDefaultEtfs() {
   if (loadResults.every((result) => !result)) loadDefaultEtfDemoData();
 }
 
-bootstrapDefaultEtfs();
+function startApp() {
+  if (appStarted) return;
+  appStarted = true;
+  initAuthorCardEffects();
+  bootstrapDefaultEtfs();
+}
+
+function handleLoginSubmit(event) {
+  event.preventDefault();
+  const username = loginUsername.value.trim();
+  const password = loginPassword.value;
+
+  if (!AUTH_CONFIG.usernames.includes(username) || password !== AUTH_CONFIG.password) {
+    setLoginStatus("Invalid username or password.", "error");
+    loginPassword.value = "";
+    loginPassword.focus();
+    return;
+  }
+
+  persistAuth(rememberLogin.checked);
+  setLoginStatus("Login successful.");
+  setGateLocked(false);
+  startApp();
+}
+
+function handleLogout() {
+  clearAuth();
+  appStarted = false;
+  setGateLocked(true);
+  setLoginStatus("Please log in to continue.");
+  loginPassword.value = "";
+  loginUsername.focus();
+}
+
+loginForm.addEventListener("submit", handleLoginSubmit);
+logoutButton.addEventListener("click", handleLogout);
+
+if (hasStoredAuth()) {
+  setGateLocked(false);
+  startApp();
+} else {
+  setGateLocked(true);
+  setLoginStatus("Please log in to continue.");
+}

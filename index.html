@@ -6,8 +6,47 @@
   <title>fricachai 股票觀察面板</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
-<body>
-  <div class="app-shell">
+<body class="auth-locked">
+  <div id="loginGate" class="login-gate">
+    <div class="login-frame">
+      <svg class="login-border-svg" viewBox="0 0 420 520" preserveAspectRatio="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="loginBorderGradient" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="420" y2="0">
+            <stop offset="0%" stop-color="#ff63c8" />
+            <stop offset="25%" stop-color="#ffbe72" />
+            <stop offset="50%" stop-color="#7ce1ff" />
+            <stop offset="75%" stop-color="#b47cff" />
+            <stop offset="100%" stop-color="#ff63c8" />
+            <animateTransform
+              attributeName="gradientTransform"
+              type="rotate"
+              from="0 210 260"
+              to="360 210 260"
+              dur="7.2s"
+              repeatCount="indefinite"
+            />
+          </linearGradient>
+        </defs>
+        <rect x="1.5" y="1.5" width="417" height="517" rx="22" ry="22" class="login-border-stroke" />
+      </svg>
+
+      <div class="login-panel">
+        <h2>登入股票觀察面板</h2>
+        <form id="loginForm" class="login-form">
+          <input id="loginUsername" type="text" autocomplete="username" placeholder="帳號" />
+          <input id="loginPassword" type="password" autocomplete="current-password" placeholder="密碼" />
+          <label class="remember-me">
+            <input id="rememberLogin" type="checkbox" />
+            <span>記住登入狀態</span>
+          </label>
+          <button type="submit">登入</button>
+        </form>
+        <p id="loginStatus" class="login-status">請輸入帳號與密碼後登入。</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="appShell" class="app-shell app-shell--hidden" aria-hidden="true">
     <main class="chart-panel">
       <header class="chart-header">
         <div>
@@ -30,6 +69,7 @@
           <p id="closeInfo" class="close-info">最新收盤價：--</p>
         </div>
         <div class="header-actions">
+          <button id="logoutButton" type="button" class="ghost-button">登出</button>
           <select id="timeframeSelect" class="ghost-select">
             <option value="1h">1小時</option>
             <option value="2h">2小時</option>
