@@ -22,6 +22,11 @@ const logoutButton = document.getElementById("logoutButton");
 const authorCard = document.querySelector(".author-card");
 const authorBubbles = [...document.querySelectorAll(".author-bubble")];
 const authorOrbitBall = document.querySelector(".author-orbit-ball");
+const APP_CONFIG = window.APP_CONFIG || {};
+const TWSE_PROXY_BASE =
+  typeof APP_CONFIG.twseProxyBase === "string"
+    ? APP_CONFIG.twseProxyBase.trim().replace(/\/+$/, "")
+    : "";
 const DATA_START_YEAR = 2020;
 const DATA_START_MONTH = 1;
 const BUY_REMINDER_LOOKBACK = 10;
@@ -1305,10 +1310,29 @@ function extractNameFromTitle(title, code) {
 }
 
 async function fetchTwseMonth(code, dateKey) {
-  const url = `https://www.twse.com.tw/exchangeReport/STOCK_DAY?response=json&date=${dateKey}&stockNo=${encodeURIComponent(code)}`;
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  const payload = await response.json();
+  const directUrl =
+    `https://www.twse.com.tw/exchangeReport/STOCK_DAY?response=json&date=${dateKey}&stockNo=${encodeURIComponent(code)}`;
+  const url = TWSE_PROXY_BASE
+    ? `${TWSE_PROXY_BASE}/api/twse-stock-day?date=${dateKey}&stockNo=${encodeURIComponent(code)}`
+    : directUrl;
+  let lastError = null;
+  let payload = null;
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetch(url, { cache: "no-store" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      payload = await response.json();
+      break;
+    } catch (error) {
+      lastError = error;
+      if (attempt === 0) {
+        await new Promise((resolve) => window.setTimeout(resolve, 350));
+      }
+    }
+  }
+
+  if (!payload) throw lastError ?? new Error("Fetch failed");
   if (payload.stat !== "OK") return { title: payload.title || "", rows: [] };
   const rows = (payload.data || [])
     .map((row) => ({
