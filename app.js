@@ -44,6 +44,14 @@ const LEGACY_DEFAULT_STOCKS = [
   { code: "2330", name: "台積電" },
 ];
 
+const KNOWN_STOCK_NAMES = {
+  "0050": "元大台灣50",
+  "0056": "元大高股息",
+  "00878": "國泰永續高股息",
+  "006208": "富邦台50",
+  "2330": "台積電",
+};
+
 const timeframeHours = { "1h": 1, "2h": 2, "3h": 3, "4h": 4, "1d": 24 };
 const timeframeLabels = { "1h": "1小時", "2h": "2小時", "3h": "3小時", "4h": "4小時", "1d": "1日" };
 
@@ -1349,7 +1357,7 @@ async function fetchCachedCandles(path) {
 
 async function fetchCachedStockData(code, fallbackName) {
   const candles = await fetchCachedCandles(`./data/${code}.json`);
-  return { code, name: fallbackName || code, candles };
+  return { code, name: fallbackName || KNOWN_STOCK_NAMES[code] || code, candles };
 }
 
 async function fetchTaiexData() {
