@@ -1607,13 +1607,61 @@ async function fetchCachedStockData(code, fallbackName) {
   return { code, name: fallbackName || ACTIVE_KNOWN_STOCK_NAMES[code] || code, candles };
 }
 
-async function fetchTaiexData() {
+async function fetchCachedTaiexData() {
   const candles = await fetchCachedCandles("./data/taiex.json");
   return { code: "TPE: IX0001", name: "台灣加權指數", candles };
 }
 
+async function fetchLiveTaiexData() {
+  const period1 = Math.floor(new Date(DATA_START_YEAR, DATA_START_MONTH - 1, 1).getTime() / 1000);
+  const period2 = Math.floor(Date.now() / 1000) + 86400;
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/%5ETWII?interval=1d&period1=${period1}&period2=${period2}`;
+  let payload = null;
+  let lastError = null;
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        cache: "no-store",
+        headers: {
+          Accept: "application/json,text/plain,*/*",
+        },
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      payload = await response.json();
+      break;
+    } catch (error) {
+      lastError = error;
+      if (attempt === 0) {
+        await new Promise((resolve) => window.setTimeout(resolve, 350));
+      }
+    }
+  }
+
+  if (!payload) throw lastError ?? new Error("Fetch failed");
+  const result = payload?.chart?.result?.[0];
+  const quote = result?.indicators?.quote?.[0];
+  const timestamps = result?.timestamp || [];
+  if (!quote || !timestamps.length) throw new Error("No official daily data");
+
+  const candles = timestamps
+    .map((timestamp, index) => ({
+      date: new Date(timestamp * 1000).toISOString(),
+      open: Number(quote.open?.[index]),
+      high: Number(quote.high?.[index]),
+      low: Number(quote.low?.[index]),
+      close: Number(quote.close?.[index]),
+      volume: Number(quote.volume?.[index] || 0),
+    }))
+    .filter((row) => row.date && [row.open, row.high, row.low, row.close].every(Number.isFinite))
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  if (!candles.length) throw new Error("No official daily data");
+  return { code: "TPE: IX0001", name: "台灣加權指數", candles };
+}
+
 async function fetchInstrumentData(code) {
-  if (isMarketIndexCode(code)) return fetchTaiexData();
+  if (isMarketIndexCode(code)) return fetchLiveTaiexData();
   return fetchTwseStockData(code);
 }
 
@@ -1622,7 +1670,7 @@ async function fetchInstrumentDataWithFallback(code, preferredName = "") {
     return await fetchInstrumentData(code);
   } catch (error) {
     if (isMarketIndexCode(code)) {
-      const cached = await fetchTaiexData();
+      const cached = await fetchCachedTaiexData();
       return { ...cached, sourceError: error };
     }
     const cached = await fetchCachedStockData(code, preferredName);
