@@ -558,9 +558,13 @@ function drawAxisValueTag(area, y, valueText, side = "left") {
   ctx.save();
   ctx.font = `12px "Segoe UI", "Noto Sans TC", sans-serif`;
   const width = ctx.measureText(valueText).width + paddingX * 2;
-  const boxX = side === "right" ? area.x + area.w - width - 6 : area.x + 6;
+  const boxX = side === "center"
+    ? area.x + (area.w - width) / 2
+    : side === "right"
+      ? area.x + area.w - width - 6
+      : area.x + 6;
   const boxY = clamp(textBaselineY - 14, area.y, area.y + area.h - height);
-  drawRoundRect(boxX, boxY, width, height, radius, "rgba(18, 21, 27, 0.94)", "rgba(255,255,255,0.24)");
+  drawRoundRect(boxX, boxY, width, height, radius, "rgba(71, 85, 130, 0.96)", "rgba(255,255,255,0.26)");
   drawText(valueText, boxX + width / 2, textBaselineY, "#f5f6fa", 12, "center");
   ctx.restore();
 }
@@ -832,7 +836,7 @@ function renderChart(stock) {
   for (let i = 0; i <= 5; i += 1) {
     const price = maxPrice - ((maxPrice - minPrice) / 5) * i;
     const y = priceArea.y + (priceArea.h / 5) * i;
-    drawText((round(price, 2) ?? price).toFixed(2), priceScaleArea.x + priceScaleArea.w - 8, y + 4, "#c8d0dd", 12, "right");
+    drawText((round(price, 2) ?? price).toFixed(2), priceScaleArea.x + priceScaleArea.w / 2, y + 4, "#c8d0dd", 12, "center");
   }
 
   ctx.strokeStyle = "rgba(255,255,255,0.12)";
@@ -1094,11 +1098,14 @@ function renderChart(stock) {
     }
     if (axisValueText) {
       const axisArea = activeHorizontalArea === priceArea ? priceScaleArea : activeHorizontalArea;
-      drawAxisValueTag(axisArea, lineY, axisValueText, "right");
+      drawAxisValueTag(axisArea, lineY, axisValueText, activeHorizontalArea === priceArea ? "center" : "right");
     }
   }
 
   let previousMonthKey = "";
+  let lastLabelRight = xAxisArea.x - 1;
+  ctx.save();
+  ctx.font = `12px "Segoe UI", "Noto Sans TC", sans-serif`;
   for (let i = 0; i < visible.length; i += 1) {
     const candle = visible[i];
     const candleDate = new Date(candle.date);
@@ -1106,9 +1113,20 @@ function renderChart(stock) {
     const monthKey = `${candleDate.getFullYear()}-${candleDate.getMonth()}`;
     if (monthKey === previousMonthKey) continue;
     previousMonthKey = monthKey;
-    const x = xAxisArea.x + i * candleWidth + candleWidth / 2 + panX;
-    drawText(formatDate(candle.date), x, xAxisArea.y + 24, "#97a0af", 12, "center");
+    const label = formatDate(candle.date);
+    const labelWidth = ctx.measureText(label).width;
+    const x = clamp(
+      xAxisArea.x + i * candleWidth + candleWidth / 2 + panX,
+      xAxisArea.x + labelWidth / 2 + 4,
+      xAxisArea.x + xAxisArea.w - labelWidth / 2 - 4,
+    );
+    const left = x - labelWidth / 2;
+    const right = x + labelWidth / 2;
+    if (left <= lastLabelRight + 10) continue;
+    lastLabelRight = right;
+    drawText(label, x, xAxisArea.y + 24, "#97a0af", 12, "center");
   }
+  ctx.restore();
   if (hoveredCandle && state.chartView.hoverX != null) {
     drawXAxisHoverTag(
       xAxisArea,
