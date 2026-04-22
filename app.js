@@ -1760,13 +1760,12 @@ stockForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const code = canonicalizeCode(codeInput.value.trim());
   const name = nameInput.value.trim();
-  if (!code) return setStatus("請先輸入股票代號。", "error");
-  upsertStock({ code, name: name || code });
-  codeInput.value = "";
-  nameInput.value = "";
-  resetChartView();
-  renderAll();
-  await ensureStockData(code, name);
+  if (!code) return setStatus("請輸入股票代號。", "error");
+  const ok = await ensureStockData(code, name);
+  if (ok) {
+    codeInput.value = "";
+    nameInput.value = "";
+  }
 });
 
 searchInput.addEventListener("input", renderWatchlist);
