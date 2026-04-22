@@ -1205,13 +1205,13 @@ function renderAll() {
   const chartResult = renderChart(stock);
   const latestReminder = getBuyReminderData(stock.code).latestSignal;
   const reminderText = latestReminder
-    ? ` | 買點：${formatBuyReminderDescription(stock.code)} | 目前跌幅 ${formatNumber(latestReminder.dropPct, 2)}%${latestReminder.inRange ? " | 已達買點" : ""}`
+    ? ` | ${formatBuyReminderDescription(stock.code)} | 累計跌幅 ${formatNumber(latestReminder.dropPct, 2)}%`
     : "";
   chartTitle.textContent = `${stock.code} ${stock.name}`;
   const changeText = chartResult.lastClose != null
     ? ` | ${formatNumber(chartResult.changeValue, 2)} (${formatNumber(chartResult.changePct, 2)}%)`
     : "";
-  closeInfo.textContent = `最新收盤價：${chartResult.lastClose != null ? formatNumber(chartResult.lastClose, 2) : "--"}${changeText}${reminderText}`;
+  closeInfo.textContent = `收盤價：${chartResult.lastClose != null ? formatNumber(chartResult.lastClose, 2) : "--"}${changeText}${reminderText}`;
   if (chartResult.fallback && state.timeframe !== "1d") {
     setStatus(`目前官方資料只有日 K，${stock.code} 已自動改用 1日顯示。`, "error");
   }
