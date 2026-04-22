@@ -76,12 +76,47 @@ const AUTH_CONFIG = {
   password: "stock2026",
 };
 const AUTH_STORAGE_KEY = "stock-observe-panel-auth";
+const WATCHLIST_STORAGE_KEY = "stock-observe-panel-watchlist";
 
 let appStarted = false;
 
 function setStatus(message, type = "") {
   statusText.textContent = message;
   statusText.className = `status-text${type ? ` ${type}` : ""}`;
+}
+
+function persistWatchlist() {
+  try {
+    const payload = {
+      stocks: state.stocks.map((stock) => ({
+        code: canonicalizeCode(stock.code),
+        name: stock.name || canonicalizeCode(stock.code),
+      })).filter((stock) => stock.code),
+      selectedCode: canonicalizeCode(state.selectedCode || ""),
+    };
+    window.localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(payload));
+  } catch {}
+}
+
+function loadPersistedWatchlist() {
+  try {
+    const raw = window.localStorage.getItem(WATCHLIST_STORAGE_KEY);
+    if (!raw) return null;
+    const payload = JSON.parse(raw);
+    const stocks = Array.isArray(payload?.stocks)
+      ? payload.stocks
+        .map((stock) => ({
+          code: canonicalizeCode(stock?.code),
+          name: String(stock?.name || canonicalizeCode(stock?.code || "")).trim(),
+        }))
+        .filter((stock) => stock.code)
+      : [];
+    if (!stocks.length) return null;
+    const selectedCode = canonicalizeCode(payload?.selectedCode || "") || stocks[0].code;
+    return { stocks, selectedCode };
+  } catch {
+    return null;
+  }
 }
 
 function getAuthStorage(remember) {
@@ -1221,6 +1256,7 @@ function renderAll() {
   const stock = state.stocks.find((entry) => entry.code === state.selectedCode) || state.stocks[0];
   if (!stock) return;
   state.selectedCode = stock.code;
+  persistWatchlist();
   renderWatchlist();
   const chartResult = renderChart(stock);
   const latestReminder = getBuyReminderData(stock.code).latestSignal;
@@ -1771,15 +1807,21 @@ async function bootstrap() {
 }
 
 async function bootstrapDefaultEtfs() {
+  const persistedWatchlist = loadPersistedWatchlist();
+  const initialStocks = persistedWatchlist?.stocks?.length ? persistedWatchlist.stocks : DEFAULT_STOCKS;
   state.stocks = [];
   state.rawCandlesByCode.clear();
-  DEFAULT_STOCKS.forEach(upsertStock);
-  state.selectedCode = "0050";
+  initialStocks.forEach(upsertStock);
+  state.selectedCode = initialStocks.some((stock) => stock.code === persistedWatchlist?.selectedCode)
+    ? persistedWatchlist.selectedCode
+    : initialStocks[0]?.code || "0050";
   renderAll();
-  const loadResults = await Promise.all(DEFAULT_STOCKS.map((stock) => ensureStockData(stock.code, stock.name)));
-  state.selectedCode = "0050";
+  const loadResults = await Promise.all(initialStocks.map((stock) => ensureStockData(stock.code, stock.name)));
+  if (!state.stocks.some((stock) => stock.code === state.selectedCode)) {
+    state.selectedCode = state.stocks[0]?.code || "0050";
+  }
   renderAll();
-  if (loadResults.every((result) => !result)) loadDefaultEtfDemoData();
+  if (!persistedWatchlist?.stocks?.length && loadResults.every((result) => !result)) loadDefaultEtfDemoData();
 }
 
 function startApp() {
