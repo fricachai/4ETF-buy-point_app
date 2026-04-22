@@ -711,9 +711,9 @@ function renderChart(stock) {
   const changeValue = lastCandle.close - prevClose;
   const changePct = prevClose === 0 ? 0 : ((lastCandle.close / prevClose) - 1) * 100;
 
-  const priceArea = { x: 42, y: 72, w: 1120, h: 340 };
+  const priceArea = { x: 42, y: 32, w: 1120, h: 380 };
   const xAxisArea = { x: 42, y: 428, w: 1120, h: 38 };
-  const priceScaleArea = { x: 1162, y: 72, w: 78, h: 350 };
+  const priceScaleArea = { x: 1162, y: 32, w: 78, h: 390 };
   const cciArea = { x: 42, y: 498, w: 1198, h: 88 };
   const kdjArea = { x: 42, y: 622, w: 1198, h: 92 };
   const macdArea = { x: 42, y: 750, w: 1198, h: 92 };
@@ -739,9 +739,6 @@ function renderChart(stock) {
     state.chartView.hoverZone === "priceScale" ? "rgba(41,105,255,0.45)" : null,
   );
 
-  drawText(`${stock.name} · ${timeframeLabels[effectiveTimeframe]} · TWSE`, 42, 42, "#f5f6fa", 24);
-  drawText(`${stock.code}`, 360, 42, "#f7c843", 20);
-  drawText(`${round(changeValue, 2)} (${round(changePct, 2)}%)`, 460, 42, changeValue >= 0 ? "#15d18d" : "#ff5263", 18);
   if (buySignalData.latestSignal?.inRange) {
     drawText(`買點提醒: ${formatBuyReminderDescription(stock.code)} / 目前跌幅 ${round(buySignalData.latestSignal.dropPct, 2)}%`, 660, 42, "#ffb347", 16);
   }
@@ -1161,7 +1158,13 @@ function renderChart(stock) {
       formatDate(hoveredCandle.date),
     );
   }
-  return { effectiveTimeframe, fallback, lastClose: lastCandle.close };
+  return {
+    effectiveTimeframe,
+    fallback,
+    lastClose: lastCandle.close,
+    changeValue,
+    changePct,
+  };
 }
 
 function renderWatchlist() {
@@ -1202,10 +1205,13 @@ function renderAll() {
   const chartResult = renderChart(stock);
   const latestReminder = getBuyReminderData(stock.code).latestSignal;
   const reminderText = latestReminder
-    ? `｜${formatBuyReminderDescription(stock.code)}｜目前跌幅 ${formatNumber(latestReminder.dropPct, 2)}%${latestReminder.inRange ? "，達買點提醒" : ""}`
+    ? ` | 買點：${formatBuyReminderDescription(stock.code)} | 目前跌幅 ${formatNumber(latestReminder.dropPct, 2)}%${latestReminder.inRange ? " | 已達買點" : ""}`
     : "";
   chartTitle.textContent = `${stock.code} ${stock.name}`;
-  closeInfo.textContent = `最新收盤價：${chartResult.lastClose != null ? formatNumber(chartResult.lastClose, 2) : "--"}${reminderText}`;
+  const changeText = chartResult.lastClose != null
+    ? ` | ${formatNumber(chartResult.changeValue, 2)} (${formatNumber(chartResult.changePct, 2)}%)`
+    : "";
+  closeInfo.textContent = `最新收盤價：${chartResult.lastClose != null ? formatNumber(chartResult.lastClose, 2) : "--"}${changeText}${reminderText}`;
   if (chartResult.fallback && state.timeframe !== "1d") {
     setStatus(`目前官方資料只有日 K，${stock.code} 已自動改用 1日顯示。`, "error");
   }
