@@ -13,6 +13,10 @@ export default {
       return handleTwseStockDay(url);
     }
 
+    if (url.pathname === "/api/twse-quote") {
+      return handleTwseQuote(url);
+    }
+
     if (url.pathname === "/api/taiex-chart") {
       return handleTaiexChart(url);
     }
@@ -40,6 +44,29 @@ async function handleTwseStockDay(url) {
     referer: "https://www.twse.com.tw/",
     origin: "https://www.twse.com.tw",
   });
+}
+
+async function handleTwseQuote(url) {
+  const exCh = url.searchParams.get("ex_ch");
+
+  if (!exCh) {
+    return json({ rtcode: "9999", rtmessage: "Missing ex_ch", msgArray: [] }, 400);
+  }
+
+  const upstream = new URL("https://mis.twse.com.tw/stock/api/getStockInfo.jsp");
+  upstream.searchParams.set("json", "1");
+  upstream.searchParams.set("delay", "0");
+  upstream.searchParams.set("ex_ch", exCh);
+  upstream.searchParams.set("_", url.searchParams.get("_") || String(Date.now()));
+
+  return proxyJson(upstream, {
+    accept: "application/json,text/plain,*/*",
+    "user-agent": "Mozilla/5.0",
+    referer: "https://mis.twse.com.tw/stock/index.jsp",
+    origin: "https://mis.twse.com.tw",
+    pragma: "no-cache",
+    "cache-control": "no-cache",
+  }, 5);
 }
 
 async function handleTaiexChart(url) {
@@ -76,12 +103,12 @@ async function handleTaiexChart(url) {
   return lastErrorResponse ?? json({ stat: "ERROR", message: "Proxy fetch failed" }, 502);
 }
 
-async function proxyJson(upstream, headers) {
+async function proxyJson(upstream, headers, cacheTtl = 300) {
   try {
     const response = await fetch(upstream.toString(), {
       headers,
       cf: {
-        cacheTtl: 300,
+        cacheTtl,
         cacheEverything: false,
       },
     });

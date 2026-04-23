@@ -30,6 +30,7 @@ const TWSE_PROXY_BASE =
 const DATA_START_YEAR = 2020;
 const DATA_START_MONTH = 1;
 const BUY_REMINDER_LOOKBACK = 10;
+const REALTIME_REFRESH_MS = 20000;
 const BUY_REMINDER_RULES = {
   "0050": { min: 5, max: 7, addOn: 7 },
   "0056": { min: 6, max: 8, addOn: 8 },
@@ -83,6 +84,7 @@ const timeframeLabels = { "1h": "1小時", "2h": "2小時", "3h": "3小時", "4h
 const state = {
   stocks: [],
   rawCandlesByCode: new Map(),
+  realtimeQuotesByCode: new Map(),
   selectedCode: null,
   loadingCodes: new Set(),
   watchlistDragCode: "",
@@ -101,6 +103,7 @@ const WATCHLIST_STORAGE_KEY = "stock-observe-panel-watchlist";
 const WATCHLIST_MIGRATION_KEY = "stock-observe-panel-watchlist-v2";
 
 let appStarted = false;
+let realtimeRefreshTimer = null;
 
 function setStatus(message, type = "") {
   statusText.textContent = message;
@@ -1352,9 +1355,12 @@ function renderWatchlist() {
     .filter((stock) => !keyword || stock.code.toLowerCase().includes(keyword) || stock.name.toLowerCase().includes(keyword))
     .forEach((stock) => {
       const reminder = getBuyReminderData(stock.code).latestSignal;
+      const quote = state.realtimeQuotesByCode.get(stock.code);
       const reminderBadge = reminder?.inRange
         ? `<span class="watch-alert-badge">${formatBuyReminderRule(stock.code)} / ${formatLatestReminderBadge(stock.code, reminder)}</span>`
         : "";
+      const quoteText = quote?.price != null ? formatNumber(quote.price, 2) : "--";
+      const quoteClass = quote?.changeValue > 0 ? "up" : quote?.changeValue < 0 ? "down" : "";
       const item = document.createElement("button");
       item.type = "button";
       item.draggable = true;
@@ -1440,6 +1446,108 @@ function renderAll() {
   }
 }
 
+function renderWatchlist() {
+  const keyword = searchInput.value.trim().toLowerCase();
+  watchlistEl.innerHTML = "";
+  state.stocks
+    .filter((stock) => !keyword || stock.code.toLowerCase().includes(keyword) || stock.name.toLowerCase().includes(keyword))
+    .forEach((stock) => {
+      const reminder = getBuyReminderData(stock.code).latestSignal;
+      const quote = state.realtimeQuotesByCode.get(stock.code);
+      const reminderBadge = reminder?.inRange
+        ? `<span class="watch-alert-badge">${formatBuyReminderRule(stock.code)} / ${formatLatestReminderBadge(stock.code, reminder)}</span>`
+        : "";
+      const quoteText = quote?.price != null ? formatNumber(quote.price, 2) : "--";
+      const quoteClass = quote?.changeValue > 0 ? "up" : quote?.changeValue < 0 ? "down" : "";
+      const item = document.createElement("button");
+      item.type = "button";
+      item.draggable = true;
+      item.className = `watch-item ${stock.code === state.selectedCode ? "active" : ""}`;
+      item.innerHTML = `
+        <span class="watch-code">${stock.code}</span>
+        <span class="watch-name-row">
+          <span class="watch-name">${stock.name}</span>
+          ${reminderBadge}
+        </span>
+        <span class="watch-quote ${quoteClass}">${quoteText}</span>
+        <span class="watch-remove" role="button" aria-label="移除 ${stock.code}" title="移除 ${stock.code}">×</span>
+      `;
+      item.addEventListener("click", async () => {
+        state.selectedCode = stock.code;
+        resetChartView();
+        renderAll();
+        if (!state.rawCandlesByCode.has(stock.code)) await ensureStockData(stock.code, stock.name);
+      });
+      item.querySelector(".watch-remove")?.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        removeStock(stock.code);
+      });
+      item.addEventListener("dragstart", (event) => {
+        state.watchlistDragCode = stock.code;
+        item.classList.add("dragging");
+        if (event.dataTransfer) {
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("text/plain", stock.code);
+        }
+      });
+      item.addEventListener("dragend", () => {
+        state.watchlistDragCode = "";
+        item.classList.remove("dragging");
+        watchlistEl.querySelectorAll(".drop-target").forEach((node) => {
+          node.classList.remove("drop-target");
+        });
+      });
+      item.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        if (!state.watchlistDragCode || state.watchlistDragCode === stock.code) return;
+        if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+        watchlistEl.querySelectorAll(".drop-target").forEach((node) => {
+          if (node !== item) node.classList.remove("drop-target");
+        });
+        item.classList.add("drop-target");
+      });
+      item.addEventListener("dragleave", () => {
+        item.classList.remove("drop-target");
+      });
+      item.addEventListener("drop", (event) => {
+        event.preventDefault();
+        item.classList.remove("drop-target");
+        if (moveWatchItemBefore(state.watchlistDragCode, stock.code)) {
+          persistWatchlist();
+          renderWatchlist();
+        }
+      });
+      watchlistEl.appendChild(item);
+    });
+}
+
+function renderAll() {
+  const stock = state.stocks.find((entry) => entry.code === state.selectedCode) || state.stocks[0];
+  if (!stock) return;
+  state.selectedCode = stock.code;
+  persistWatchlist();
+  renderWatchlist();
+  const chartResult = renderChart(stock);
+  const latestReminder = getBuyReminderData(stock.code).latestSignal;
+  const realtimeQuote = state.realtimeQuotesByCode.get(stock.code);
+  const reminderText = latestReminder
+    ? ` | ${formatBuyReminderDescription(stock.code)} | ${formatLatestReminderSummary(stock.code, latestReminder)}`
+    : "";
+  chartTitle.textContent = `${stock.code} ${stock.name}`;
+  const displayPrice = realtimeQuote?.price ?? chartResult.lastClose;
+  const displayChangeValue = realtimeQuote?.changeValue ?? chartResult.changeValue;
+  const displayChangePct = realtimeQuote?.changePct ?? chartResult.changePct;
+  const asOfText = realtimeQuote?.asOf ? ` | 即時 ${realtimeQuote.asOf}` : "";
+  const changeText = displayPrice != null
+    ? ` | ${formatNumber(displayChangeValue, 2)} (${formatNumber(displayChangePct, 2)}%)`
+    : "";
+  closeInfo.textContent = `最新價格：${displayPrice != null ? formatNumber(displayPrice, 2) : "--"}${changeText}${asOfText}${reminderText}`;
+  if (chartResult.fallback && state.timeframe !== "1d") {
+    setStatus(`${stock.code} 目前只有日線資料，所以小時 K 會先用 1 日資料顯示。`, "error");
+  }
+}
+
 function upsertStock(stock) {
   const normalized = canonicalizeCode(stock.code);
   if (!normalized) return;
@@ -1479,6 +1587,7 @@ function removeStock(code) {
   if (removeIndex < 0) return false;
   const [removed] = state.stocks.splice(removeIndex, 1);
   state.rawCandlesByCode.delete(removed.code);
+  state.realtimeQuotesByCode.delete(removed.code);
   state.loadingCodes.delete(removed.code);
   const fallbackIndex = Math.min(removeIndex, state.stocks.length - 1);
   state.selectedCode = state.stocks[fallbackIndex]?.code || state.stocks[0]?.code || "";
@@ -1521,8 +1630,15 @@ function parseTwseDate(value) {
 function parseNumber(value) {
   if (value == null) return null;
   const cleaned = String(value).replace(/,/g, "").trim();
-  if (!cleaned || cleaned === "--" || cleaned === "---") return null;
+  if (!cleaned || cleaned === "-" || cleaned === "--" || cleaned === "---") return null;
   return Number(cleaned);
+}
+
+function firstFiniteNumber(...values) {
+  for (const value of values) {
+    if (Number.isFinite(value)) return value;
+  }
+  return null;
 }
 
 function sleep(ms) {
@@ -1579,6 +1695,121 @@ function extractNameFromTitle(title, code) {
   return afterCode.split(" ").find(Boolean) || code;
 }
 
+function getRealtimeChannel(code) {
+  const normalized = canonicalizeCode(code);
+  if (!normalized) return "";
+  if (isMarketIndexCode(normalized)) return "tse_t00.tw";
+  if (/^\d+$/.test(normalized)) return `tse_${normalized}.tw`;
+  return "";
+}
+
+function parseRealtimeCode(row) {
+  const channel = String(row?.ex_ch || row?.ch || "").toLowerCase();
+  if (channel.includes("tse_t00.tw")) return "TPE: IX0001";
+  return canonicalizeCode(String(row?.c || "").trim());
+}
+
+function formatRealtimeTimestamp(dateText, timeText, millisText) {
+  if (millisText && Number.isFinite(Number(millisText))) {
+    return new Date(Number(millisText)).toLocaleString("zh-TW", { hour12: false });
+  }
+  if (!dateText || !timeText) return "";
+  const rawDate = String(dateText).trim();
+  const rawTime = String(timeText).trim();
+  if (!/^\d{8}$/.test(rawDate)) return rawTime || "";
+  return `${rawDate.slice(0, 4)}-${rawDate.slice(4, 6)}-${rawDate.slice(6, 8)} ${rawTime}`;
+}
+
+function normalizeRealtimeQuote(row, fallbackName = "") {
+  const code = parseRealtimeCode(row);
+  if (!code) return null;
+  const price = firstFiniteNumber(parseNumber(row?.z), parseNumber(row?.pz), parseNumber(row?.y));
+  const previousClose = firstFiniteNumber(parseNumber(row?.y), price);
+  const changeValue = Number.isFinite(price) && Number.isFinite(previousClose) ? price - previousClose : null;
+  const changePct = Number.isFinite(changeValue) && Number.isFinite(previousClose) && previousClose !== 0
+    ? (changeValue / previousClose) * 100
+    : null;
+  return {
+    code,
+    name: String(row?.n || fallbackName || code).trim(),
+    price,
+    previousClose,
+    open: parseNumber(row?.o),
+    high: parseNumber(row?.h),
+    low: parseNumber(row?.l),
+    volume: parseNumber(row?.v) ?? 0,
+    changeValue,
+    changePct,
+    asOf: formatRealtimeTimestamp(row?.d, row?.t, row?.tlong),
+  };
+}
+
+async function fetchRealtimeQuotes(codes) {
+  const normalizedCodes = [...new Set(codes.map((code) => canonicalizeCode(code)).filter(Boolean))];
+  const channels = normalizedCodes.map(getRealtimeChannel).filter(Boolean);
+  if (!channels.length) return new Map();
+
+  const exCh = channels.join("|");
+  const timestamp = Date.now();
+  const directUrl = `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?json=1&delay=0&ex_ch=${encodeURIComponent(exCh)}&_=${timestamp}`;
+  const candidates = [];
+  if (TWSE_PROXY_BASE) {
+    candidates.push({
+      label: "TWSE realtime proxy",
+      url: `${TWSE_PROXY_BASE}/api/twse-quote?ex_ch=${encodeURIComponent(exCh)}&_=${timestamp}`,
+      attempts: 2,
+    });
+  }
+  candidates.push({
+    label: "TWSE realtime",
+    url: directUrl,
+    attempts: 1,
+  });
+
+  const payload = await fetchJsonFromCandidates(candidates, {
+    cache: "no-store",
+    headers: {
+      Accept: "application/json,text/plain,*/*",
+    },
+  });
+
+  const quotes = new Map();
+  (payload?.msgArray || []).forEach((row) => {
+    const code = parseRealtimeCode(row);
+    const fallbackName = ACTIVE_KNOWN_STOCK_NAMES[code] || "";
+    const quote = normalizeRealtimeQuote(row, fallbackName);
+    if (quote) quotes.set(quote.code, quote);
+  });
+  return quotes;
+}
+
+async function refreshRealtimeQuotes() {
+  if (!state.stocks.length) return;
+  try {
+    const quotes = await fetchRealtimeQuotes(state.stocks.map((stock) => stock.code));
+    quotes.forEach((quote, code) => {
+      state.realtimeQuotesByCode.set(code, quote);
+      if (quote.name && state.stocks.some((stock) => stock.code === code)) {
+        upsertStock({ code, name: quote.name });
+      }
+    });
+    renderAll();
+  } catch {}
+}
+
+function ensureRealtimeRefreshLoop() {
+  if (realtimeRefreshTimer) return;
+  realtimeRefreshTimer = window.setInterval(() => {
+    refreshRealtimeQuotes();
+  }, REALTIME_REFRESH_MS);
+}
+
+function stopRealtimeRefreshLoop() {
+  if (!realtimeRefreshTimer) return;
+  window.clearInterval(realtimeRefreshTimer);
+  realtimeRefreshTimer = null;
+}
+
 async function fetchTwseMonth(code, dateKey) {
   const directUrl =
     `https://www.twse.com.tw/exchangeReport/STOCK_DAY?response=json&date=${dateKey}&stockNo=${encodeURIComponent(code)}`;
@@ -1623,11 +1854,11 @@ function normalizeCandlePayload(rows) {
   return rows
     .map((row) => ({
       date: row.date,
-      open: Number(row.open),
-      high: Number(row.high),
-      low: Number(row.low),
-      close: Number(row.close),
-      volume: Number(row.volume || 0),
+      open: parseNumber(row.open),
+      high: parseNumber(row.high),
+      low: parseNumber(row.low),
+      close: parseNumber(row.close),
+      volume: parseNumber(row.volume) ?? 0,
     }))
     .filter((row) => row.date && [row.open, row.high, row.low, row.close].every(Number.isFinite))
     .sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -1683,11 +1914,11 @@ async function fetchLiveTaiexData() {
   const candles = timestamps
     .map((timestamp, index) => ({
       date: new Date(timestamp * 1000).toISOString(),
-      open: Number(quote.open?.[index]),
-      high: Number(quote.high?.[index]),
-      low: Number(quote.low?.[index]),
-      close: Number(quote.close?.[index]),
-      volume: Number(quote.volume?.[index] || 0),
+      open: parseNumber(quote.open?.[index]),
+      high: parseNumber(quote.high?.[index]),
+      low: parseNumber(quote.low?.[index]),
+      close: parseNumber(quote.close?.[index]),
+      volume: parseNumber(quote.volume?.[index]) ?? 0,
     }))
     .filter((row) => row.date && [row.open, row.high, row.low, row.close].every(Number.isFinite))
     .sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -1861,6 +2092,7 @@ function generateDemoCandles(code, name, seed, startPrice) {
 function loadDemoData() {
   state.stocks = [];
   state.rawCandlesByCode.clear();
+  state.realtimeQuotesByCode.clear();
   state.timeframe = "1d";
   timeframeSelect.value = "1d";
   ACTIVE_DEFAULT_STOCKS.forEach(upsertStock);
@@ -1875,6 +2107,7 @@ function loadDemoData() {
 function loadDefaultEtfDemoData() {
   state.stocks = [];
   state.rawCandlesByCode.clear();
+  state.realtimeQuotesByCode.clear();
   state.timeframe = "1d";
   timeframeSelect.value = "1d";
   ACTIVE_DEFAULT_STOCKS.forEach(upsertStock);
@@ -2063,6 +2296,7 @@ stockForm.addEventListener("submit", async (event) => {
   if (!code) return setStatus("請輸入股票代號。", "error");
   const ok = await ensureLookupStockData(code);
   if (ok) {
+    await refreshRealtimeQuotes();
     codeInput.value = "";
     nameInput.value = "";
   }
@@ -2093,6 +2327,7 @@ async function bootstrap() {
   initAuthorCardEffects();
   state.stocks = [];
   state.rawCandlesByCode.clear();
+  state.realtimeQuotesByCode.clear();
   ACTIVE_DEFAULT_STOCKS.forEach(upsertStock);
   state.selectedCode = "0050";
   renderAll();
@@ -2110,12 +2345,14 @@ async function bootstrapDefaultEtfs() {
   const initialStocks = persistedWatchlist?.stocks?.length ? persistedWatchlist.stocks : ACTIVE_DEFAULT_STOCKS;
   state.stocks = [];
   state.rawCandlesByCode.clear();
+  state.realtimeQuotesByCode.clear();
   initialStocks.forEach(upsertStock);
   state.selectedCode = initialStocks.some((stock) => stock.code === persistedWatchlist?.selectedCode)
     ? persistedWatchlist.selectedCode
     : initialStocks[0]?.code || "0050";
   renderAll();
   const loadResults = await Promise.all(initialStocks.map((stock) => ensureStockData(stock.code, stock.name)));
+  await refreshRealtimeQuotes();
   if (!state.stocks.some((stock) => stock.code === state.selectedCode)) {
     state.selectedCode = state.stocks[0]?.code || "0050";
   }
@@ -2128,6 +2365,7 @@ function startApp() {
   appStarted = true;
   initAuthorCardEffects();
   bootstrapDefaultEtfs();
+  ensureRealtimeRefreshLoop();
 }
 
 function handleLoginSubmit(event) {
@@ -2151,6 +2389,7 @@ function handleLoginSubmit(event) {
 function handleLogout() {
   clearAuth();
   appStarted = false;
+  stopRealtimeRefreshLoop();
   setGateLocked(true);
   setLoginStatus("Please log in to continue.");
   loginPassword.value = "";

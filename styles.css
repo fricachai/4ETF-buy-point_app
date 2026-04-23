@@ -527,7 +527,7 @@ input::placeholder {
 
 .watchlist-header {
   display: grid;
-  grid-template-columns: 110px 1fr;
+  grid-template-columns: 110px minmax(0, 1fr) 88px 28px;
   gap: 10px;
   color: var(--muted);
   font-size: 13px;
@@ -569,7 +569,7 @@ input::placeholder {
 
 .watch-item {
   display: grid;
-  grid-template-columns: 110px minmax(0, 1fr) 28px;
+  grid-template-columns: 110px minmax(0, 1fr) 88px 28px;
   gap: 10px;
   padding: 13px 12px;
   border-bottom: 1px solid var(--line-soft);
@@ -624,6 +624,34 @@ input::placeholder {
   justify-content: space-between;
   gap: 10px;
   min-width: 0;
+}
+
+.watch-quote {
+  align-self: center;
+  justify-self: end;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: #f3f6fb;
+}
+
+.watch-quote.up {
+  color: #ff7f8c;
+}
+
+.watch-quote.down {
+  color: #4fd0a5;
+}
+
+.watch-item.active .watch-quote {
+  color: #111317;
+}
+
+.watch-item.active .watch-quote.up {
+  color: #c72a39;
+}
+
+.watch-item.active .watch-quote.down {
+  color: #0d8f66;
 }
 
 .watch-remove {
