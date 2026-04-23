@@ -527,8 +527,8 @@ input::placeholder {
 
 .watchlist-header {
   display: grid;
-  grid-template-columns: 110px minmax(0, 1fr) 88px 28px;
-  gap: 10px;
+  grid-template-columns: 102px minmax(0, 1fr) 78px 24px;
+  gap: 6px;
   color: var(--muted);
   font-size: 13px;
   padding: 10px 12px;
@@ -543,6 +543,11 @@ input::placeholder {
   justify-content: center;
   min-height: 22px;
   text-align: center;
+}
+
+.watchlist-header span:nth-child(2) {
+  justify-content: flex-start;
+  text-align: left;
 }
 
 .status-text {
@@ -578,8 +583,8 @@ input::placeholder {
 
 .watch-item {
   display: grid;
-  grid-template-columns: 110px minmax(0, 1fr) 88px 28px;
-  gap: 10px;
+  grid-template-columns: 102px minmax(0, 1fr) 78px 24px;
+  gap: 6px;
   min-height: 68px;
   padding: 10px 12px;
   border-bottom: 1px solid var(--line-soft);
@@ -626,6 +631,10 @@ input::placeholder {
 .watch-item .watch-name {
   color: #ffffff;
   line-height: 1.2;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .watch-item.active .watch-code {
@@ -639,23 +648,26 @@ input::placeholder {
 .watch-name-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  justify-content: flex-start;
+  gap: 6px;
   min-width: 0;
   min-height: 24px;
+  overflow: hidden;
 }
 
 .watch-quote {
   display: flex;
   align-self: center;
   align-items: center;
-  justify-self: end;
-  justify-content: flex-end;
+  justify-self: center;
+  justify-content: center;
   min-height: 24px;
+  min-width: 100%;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   color: #f3f6fb;
   line-height: 1.2;
+  text-align: center;
 }
 
 .watch-quote.up {
@@ -685,7 +697,7 @@ input::placeholder {
   width: 28px;
   height: 28px;
   align-self: center;
-  justify-self: end;
+  justify-self: center;
   border-radius: 8px;
   color: rgba(255, 255, 255, 0.82);
   font-size: 22px;
