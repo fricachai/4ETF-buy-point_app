@@ -999,13 +999,20 @@ function renderChart(stock) {
     signalToggleArea.h,
     8,
     state.chartView.hoverZone === "signalToggle"
-      ? "rgba(255,255,255,0.10)"
+      ? (state.showSignalTags ? "#ffd84d" : "#5ac8ff")
       : state.showSignalTags
-        ? "rgba(255,196,67,0.16)"
-        : "rgba(255,255,255,0.04)",
-    state.showSignalTags ? "rgba(255,196,67,0.42)" : "rgba(255,255,255,0.14)",
+        ? "#ffb300"
+        : "#215dff",
+    state.showSignalTags ? "#fff1a6" : "#9fdfff",
   );
-  drawText(state.showSignalTags ? "標籤 開" : "標籤 關", signalToggleArea.x + signalToggleArea.w / 2, signalToggleArea.y + 24, "#ffffff", 12, "center");
+  drawText(
+    state.showSignalTags ? "標籤 開" : "標籤 關",
+    signalToggleArea.x + signalToggleArea.w / 2,
+    signalToggleArea.y + 24,
+    state.showSignalTags ? "#241400" : "#ffffff",
+    12,
+    "center",
+  );
 
   if (buySignalData.latestSignal?.inRange) {
     drawText(`買點提醒: ${formatBuyReminderDescription(stock.code)} / ${formatLatestReminderSummary(stock.code, buySignalData.latestSignal)}`, 660, 42, "#ffb347", 16);
