@@ -24,6 +24,7 @@ body {
     radial-gradient(circle at top left, rgba(32, 60, 108, 0.3), transparent 25%),
     linear-gradient(135deg, #06070b, #0b0f15 45%, #090a0e);
   color: var(--text);
+  min-height: 100vh;
 }
 
 body.auth-locked {
@@ -176,10 +177,15 @@ body.auth-locked {
   grid-template-columns: minmax(0, 1fr) 420px;
   height: 100vh;
   overflow: hidden;
+  position: relative;
 }
 
 .app-shell--hidden {
   visibility: hidden;
+}
+
+.mobile-switcher {
+  display: none;
 }
 
 .chart-panel,
@@ -395,6 +401,8 @@ h3 {
 .header-actions {
   display: flex;
   gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .ghost-button,
@@ -499,6 +507,14 @@ h3 {
   border-left: 1px solid var(--line);
 }
 
+.eyebrow {
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
 .stock-form,
 .watchlist-toolbar {
   display: grid;
@@ -523,6 +539,12 @@ input {
 
 input::placeholder {
   color: #798294;
+}
+
+input,
+button,
+select {
+  min-height: 44px;
 }
 
 .watchlist-header {
@@ -763,11 +785,202 @@ input::placeholder {
 }
 
 @media (max-width: 860px) {
+  body {
+    min-height: 100dvh;
+  }
+
+  .login-gate {
+    padding: 16px;
+  }
+
+  .login-panel {
+    padding: 22px 18px;
+  }
+
+  .login-panel h2 {
+    font-size: 24px;
+  }
+
+  .app-shell {
+    display: block;
+    min-height: 100dvh;
+    padding-bottom: 92px;
+    overflow: visible;
+  }
+
+  .mobile-switcher {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    z-index: 25;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 18px;
+    background: rgba(10, 12, 18, 0.88);
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+
+  .mobile-switcher__button {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .mobile-switcher__button.is-active {
+    border-color: rgba(247, 200, 67, 0.55);
+    background: linear-gradient(180deg, rgba(247, 200, 67, 0.3), rgba(255, 152, 17, 0.2));
+    color: #fff7d1;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  }
+
+  .chart-panel,
+  .watchlist-panel {
+    padding: 14px 14px 18px;
+  }
+
+  .chart-panel {
+    border-bottom: none;
+  }
+
+  .chart-header,
+  .watchlist-top {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .title-row {
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  h1 {
+    font-size: 24px;
+  }
+
+  h2 {
+    font-size: 22px;
+  }
+
+  .author-card {
+    width: 100%;
+    padding: 12px 16px 12px 18px;
+    border-radius: 22px;
+    font-size: 13px;
+  }
+
+  .author-copy {
+    gap: 8px;
+  }
+
+  .close-info {
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
   .stock-form {
     grid-template-columns: 1fr;
   }
 
   .header-actions {
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .header-actions > *:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .ghost-button,
+  .ghost-select,
+  .icon-button,
+  .stock-form button,
+  input {
+    width: 100%;
+    font-size: 16px;
+  }
+
+  .chart-stage {
+    padding: 10px;
+    border-radius: 22px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #chartCanvas {
+    min-width: 920px;
+  }
+
+  .watchlist-panel {
+    border-left: none;
+    border-top: 1px solid var(--line);
+    padding-top: 18px;
+  }
+
+  .watchlist-header {
+    grid-template-columns: 84px minmax(0, 1fr) 70px 28px;
+    padding-inline: 8px;
+  }
+
+  .watch-item {
+    grid-template-columns: 84px minmax(0, 1fr) 70px 28px;
+    padding: 10px 8px;
+    min-height: 64px;
+  }
+
+  .watch-code,
+  .watch-quote {
+    font-size: 14px;
+  }
+
+  .watch-name-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .watch-item .watch-name {
+    white-space: normal;
+  }
+
+  .watch-alert-badge {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .app-shell[data-mobile-panel="chart"] .watchlist-panel {
+    display: none;
+  }
+
+  .app-shell[data-mobile-panel="watchlist"] .chart-panel {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .header-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .header-actions > *:last-child {
+    grid-column: auto;
+  }
+
+  .watchlist-header {
+    font-size: 12px;
+  }
+
+  .watch-item {
+    gap: 4px;
   }
 }

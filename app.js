@@ -1,6 +1,7 @@
 const canvas = document.getElementById("chartCanvas");
 const ctx = canvas.getContext("2d");
 const appShell = document.getElementById("appShell");
+const mobilePanelButtons = [...document.querySelectorAll("[data-mobile-panel]")];
 const chartTitle = document.getElementById("chartTitle");
 const closeInfo = document.getElementById("closeInfo");
 const watchlistEl = document.getElementById("watchlist");
@@ -86,6 +87,7 @@ const state = {
   rawCandlesByCode: new Map(),
   realtimeQuotesByCode: new Map(),
   selectedCode: null,
+  mobilePanel: "chart",
   showSignalTags: true,
   loadingCodes: new Set(),
   watchlistDragCode: "",
@@ -105,6 +107,33 @@ const WATCHLIST_MIGRATION_KEY = "stock-observe-panel-watchlist-v2";
 
 let appStarted = false;
 let realtimeRefreshTimer = null;
+
+function isMobileViewport() {
+  return window.matchMedia("(max-width: 860px)").matches;
+}
+
+function syncMobilePanelButtons() {
+  mobilePanelButtons.forEach((button) => {
+    const active = button.dataset.mobilePanel === state.mobilePanel;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+}
+
+function setMobilePanel(panel) {
+  state.mobilePanel = panel === "watchlist" ? "watchlist" : "chart";
+  appShell.dataset.mobilePanel = state.mobilePanel;
+  syncMobilePanelButtons();
+}
+
+function syncResponsiveShell() {
+  if (!isMobileViewport()) {
+    appShell.dataset.mobilePanel = "";
+    syncMobilePanelButtons();
+    return;
+  }
+  setMobilePanel(state.mobilePanel);
+}
 
 function setStatus(message, type = "") {
   statusText.textContent = message;
@@ -992,19 +1021,44 @@ function renderChart(stock) {
     state.chartView.hoverZone === "priceScale" ? "rgba(41,105,255,0.08)" : "rgba(255,255,255,0.03)",
     state.chartView.hoverZone === "priceScale" ? "rgba(41,105,255,0.45)" : null,
   );
+  ctx.save();
+  const signalToggleGradient = ctx.createLinearGradient(
+    signalToggleArea.x,
+    signalToggleArea.y,
+    signalToggleArea.x + signalToggleArea.w,
+    signalToggleArea.y + signalToggleArea.h,
+  );
+  if (state.showSignalTags) {
+    signalToggleGradient.addColorStop(0, state.chartView.hoverZone === "signalToggle" ? "#fff07a" : "#ffd84a");
+    signalToggleGradient.addColorStop(0.55, state.chartView.hoverZone === "signalToggle" ? "#ffb11f" : "#ff9800");
+    signalToggleGradient.addColorStop(1, state.chartView.hoverZone === "signalToggle" ? "#ff7a18" : "#ff6a00");
+  } else {
+    signalToggleGradient.addColorStop(0, state.chartView.hoverZone === "signalToggle" ? "#8ce3ff" : "#62d0ff");
+    signalToggleGradient.addColorStop(0.55, state.chartView.hoverZone === "signalToggle" ? "#3d8bff" : "#2c6dff");
+    signalToggleGradient.addColorStop(1, state.chartView.hoverZone === "signalToggle" ? "#5d5bff" : "#4a47ff");
+  }
+  ctx.shadowBlur = state.chartView.hoverZone === "signalToggle" ? 18 : 12;
+  ctx.shadowColor = state.showSignalTags ? "rgba(255, 164, 0, 0.55)" : "rgba(58, 131, 255, 0.50)";
   drawRoundRect(
     signalToggleArea.x,
     signalToggleArea.y,
     signalToggleArea.w,
     signalToggleArea.h,
     8,
-    state.chartView.hoverZone === "signalToggle"
-      ? (state.showSignalTags ? "#ffd84d" : "#5ac8ff")
-      : state.showSignalTags
-        ? "#ffb300"
-        : "#215dff",
-    state.showSignalTags ? "#fff1a6" : "#9fdfff",
+    signalToggleGradient,
+    state.showSignalTags ? "#fff4b8" : "#c6edff",
   );
+  ctx.shadowBlur = 0;
+  drawRoundRect(
+    signalToggleArea.x + 1.5,
+    signalToggleArea.y + 1.5,
+    signalToggleArea.w - 3,
+    signalToggleArea.h - 3,
+    7,
+    null,
+    "rgba(255,255,255,0.28)",
+  );
+  ctx.restore();
   drawText(
     state.showSignalTags ? "標籤 開" : "標籤 關",
     signalToggleArea.x + signalToggleArea.w / 2,
@@ -1573,6 +1627,7 @@ function renderWatchlist() {
       item.addEventListener("click", async () => {
         state.selectedCode = stock.code;
         resetChartView();
+        if (isMobileViewport()) setMobilePanel("chart");
         renderAll();
         if (!state.rawCandlesByCode.has(stock.code)) await ensureStockData(stock.code, stock.name);
       });
@@ -1623,6 +1678,7 @@ function renderWatchlist() {
 function renderAll() {
   const stock = state.stocks.find((entry) => entry.code === state.selectedCode) || state.stocks[0];
   if (!stock) return;
+  syncResponsiveShell();
   state.selectedCode = stock.code;
   persistWatchlist();
   renderWatchlist();
@@ -2407,6 +2463,7 @@ stockForm.addEventListener("submit", async (event) => {
   if (!code) return setStatus("請輸入股票代號。", "error");
   const ok = await ensureLookupStockData(code);
   if (ok) {
+    if (isMobileViewport()) setMobilePanel("chart");
     await refreshRealtimeQuotes();
     codeInput.value = "";
     nameInput.value = "";
@@ -2432,7 +2489,16 @@ priceFileInput.addEventListener("change", (event) => {
   event.target.value = "";
 });
 
-window.addEventListener("resize", () => renderAll());
+mobilePanelButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    setMobilePanel(button.dataset.mobilePanel);
+  });
+});
+
+window.addEventListener("resize", () => {
+  syncResponsiveShell();
+  renderAll();
+});
 
 async function bootstrap() {
   initAuthorCardEffects();
@@ -2512,8 +2578,10 @@ logoutButton.addEventListener("click", handleLogout);
 
 if (hasStoredAuth()) {
   setGateLocked(false);
+  syncResponsiveShell();
   startApp();
 } else {
   setGateLocked(true);
+  syncResponsiveShell();
   setLoginStatus("Please log in to continue.");
 }
